@@ -1,0 +1,137 @@
+buildscript {
+	repositories {
+		mavenLocal()
+		mavenCentral()
+		maven {
+			// Needed for FG
+			name = "forge"
+			url = "http://files.minecraftforge.net/maven"
+		}
+		maven {
+			// Needed for gradle API
+			name = "gradle"
+			url = "https://plugins.gradle.org/m2/"
+		}
+	}
+	dependencies {
+		// ForgeGradle itself
+		classpath 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
+		// Gradle plugin support
+		classpath 'com.gradle.publish:plugin-publish-plugin:0.9.1'
+	}
+}
+
+// Compiling
+apply plugin: 'java'
+// idea IDE
+apply plugin: 'idea'
+// eclipse IDE
+apply plugin: 'eclipse'
+// Needed to use content from maven repos
+apply plugin: 'maven'
+// Needed to generate gradle plugin info
+apply plugin: 'com.gradle.plugin-publish'
+
+group = 'pokechu22.test'
+version = '1.0' + getGitHash()
+archivesBaseName = 'TEST'
+targetCompatibility = '1.6'
+sourceCompatibility = '1.6'
+
+repositories {
+	// Local repository (eg, own build of ForgeGradle)
+	mavenLocal()
+	// Needed for ForgeGradle (among other things) 
+	maven {
+		name = "forge"
+		url = "http://files.minecraftforge.net/maven"
+	}
+	// Main maven repos
+	jcenter()
+	mavenCentral()
+}
+
+configurations {
+	deployerJars
+	shade
+	compileOnly.extendsFrom shade
+}
+
+dependencies {
+	compile gradleApi()
+
+	compile 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
+
+	// We need *this* version for FG
+	compile 'com.google.guava:guava:18.0'
+	testCompile 'junit:junit:4.12'
+}
+
+task wrapper(type: Wrapper) {
+	gradleVersion = '2.14'
+}
+
+sourceSets {
+	main.compileClasspath += configurations.shade;
+	main.runtimeClasspath += configurations.shade;
+	test.compileClasspath += configurations.shade;
+	test.runtimeClasspath += configurations.shade;
+}
+
+compileJava {
+	options.deprecation = true
+}
+
+jar {
+
+	configurations.shade.each { dep ->
+		from(project.zipTree(dep)){
+			exclude 'META-INF', 'META-INF/**'
+		}
+	}
+
+	manifest {
+		attributes 'version': project.version
+		attributes 'javaCompliance': project.targetCompatibility
+		attributes 'group': project.group
+		attributes 'Implementation-Version': project.version + getGitHash()
+	}
+}
+
+javadoc {
+	classpath += configurations.compileOnly
+
+	// Linked javadoc urls
+	options.addStringOption 'link', 'https://gradle.org/docs/current/javadoc/'
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+	from javadoc
+	classifier = "javadoc"
+}
+
+artifacts {
+	archives jar
+	archives javadocJar
+}
+
+pluginBundle {
+	website = 'http://www.gradle.org/' // TODO
+	vcsUrl = 'https://github.com/Pokechu22/TODO' // TODO
+	description = 'Gradle plugin for the base-edit needs that ForgeGradle doesn\'t fulfil'
+	tags = ['minecraft', 'mcp']
+
+	plugins {
+		// TODO: Real name for plugin
+		wat {
+			id = 'pokechu22.test'
+			displayName = 'Test'
+		}
+	}
+}
+
+def getGitHash() {
+	def process = 'git rev-parse --short HEAD'.execute()
+	process.waitFor()
+	return '-' + (process.exitValue() > 0 ? 'unknown' : process.text.trim())
+}
