@@ -7,8 +7,11 @@ import static net.minecraftforge.gradle.common.Constants.REPLACE_CACHE_DIR;
 import static net.minecraftforge.gradle.common.Constants.REPLACE_MC_VERSION;
 import static net.minecraftforge.gradle.common.Constants.TASK_DL_CLIENT;
 
+import java.io.File;
 import java.util.List;
+import java.util.concurrent.Callable;
 
+import net.minecraftforge.gradle.user.TaskRecompileMc;
 import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 
 import org.gradle.api.Task;
@@ -20,24 +23,38 @@ public class WatPlugin extends
 		UserVanillaBasePlugin<WatExtension> {
 	@Override
 	protected void applyVanillaUserPlugin() {
-
 		String baseName = "mod-"
 				+ this.project.property("archivesBaseName").toString()
 						.toLowerCase();
 
 		TaskContainer tasks = this.project.getTasks();
 		final Jar jar = (Jar) tasks.getByName("jar");
-		// Note:
+		// Note: format is:
 		// [baseName]-[appendix]-[version]-[classifier].[extension]
-		jar.setExtension("zip");  //
 		jar.setBaseName(baseName);
+		jar.setAppendix("baseedit");
+		jar.setExtension("zip");
 
 		final Jar sourceJar = (Jar) tasks.getByName("sourceJar");
 		sourceJar.setBaseName(baseName);
+		
+		final TaskRecompileMc recompTask = (TaskRecompileMc) tasks.getByName("recompileMc");
+		
+		BaseClassesTask baseTask = makeTask("baseClasses", BaseClassesTask.class);
+		baseTask.setJar(new Callable<File>() {
+			@Override
+			public File call() throws Exception {
+				return recompTask.getInSources();
+			}
+		});
+		baseTask.dependsOn("deobfMcMCP");
 	}
 
 	@Override
 	protected void afterEvaluate() {
+		final Task classesTask = project.getTasks().getByName("classes");
+		classesTask.dependsOn("baseClasses");
+		System.out.println(classesTask);
 		final Jar jarTask = (Jar) project.getTasks().getByName("jar");
 		
 		if (this.hasClientRun()) {
