@@ -58,8 +58,12 @@ public class BaseClassesTask extends DefaultTask {
 		}
 	}
 
-	@InputFile
 	public void setJar(Object file) {
 		this.inJar = file;
+	}
+
+	@InputFile
+	public Object getJar() {
+		return inJar;
 	}
 }
