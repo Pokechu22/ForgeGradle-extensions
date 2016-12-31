@@ -1,4 +1,4 @@
-package pokechu22.test;
+package pokechu22.test.begradle;
 
 import static net.minecraftforge.gradle.common.Constants.JAR_CLIENT_FRESH;
 import static net.minecraftforge.gradle.common.Constants.MCP_INJECT;
@@ -14,13 +14,25 @@ import java.util.concurrent.Callable;
 import net.minecraftforge.gradle.user.TaskRecompileMc;
 import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 
+import org.gradle.api.Action;
 import org.gradle.api.Task;
+import org.gradle.api.internal.plugins.DslObject;
+import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.JavaExec;
+import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.jvm.tasks.Jar;
 
-public class WatPlugin extends
-		UserVanillaBasePlugin<WatExtension> {
+public class BaseEditPlugin extends
+		UserVanillaBasePlugin<BaseEditExtension> {
+
+	/*@Inject
+	public BaseEditPlugin(SourceDirectorySetFactory sourceDirectorySetFactory) {
+		this.sourceDirectorySetFactory = sourceDirectorySetFactory;
+	}
+
+	private final SourceDirectorySetFactory sourceDirectorySetFactory;*/
+
 	@Override
 	protected void applyVanillaUserPlugin() {
 		String baseName = "mod-"
@@ -37,10 +49,10 @@ public class WatPlugin extends
 
 		final Jar sourceJar = (Jar) tasks.getByName("sourceJar");
 		sourceJar.setBaseName(baseName);
-		
+
 		final TaskRecompileMc recompTask = (TaskRecompileMc) tasks.getByName("recompileMc");
-		
-		BaseClassesTask baseTask = makeTask("baseClasses", BaseClassesTask.class);
+
+		final ExtractOriginalClassesTask baseTask = makeTask("extractBaseClasses", ExtractOriginalClassesTask.class);
 		baseTask.setJar(new Callable<File>() {
 			@Override
 			public File call() throws Exception {
@@ -48,15 +60,76 @@ public class WatPlugin extends
 			}
 		});
 		baseTask.dependsOn("deobfMcMCP");
+
+		// Loosely based on AntlrPlugin.  Add new options to each sourceset.
+		project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
+				.all(new Action<SourceSet>() {
+					@Override
+					public void execute(SourceSet sourceSet) {
+						injectSourceSet(sourceSet);
+					}
+				});
+	}
+
+	/**
+	 * Injects the needed tasks and such into a {@link SourceSet}.
+	 * 
+	 * @see org.gradle.api.plugins.antlr.AntlrPlugin#apply Inner class within AntlrPlugin
+	 */
+	private void injectSourceSet(SourceSet sourceSet) {
+		TaskContainer tasks = this.project.getTasks();
+
+		// Add a new "base" virtual directory mapping that can be used within the SourceSet.
+		final BaseClassesVirtualDirectory baseDirectoryDelegate = new BaseClassesVirtualDirectory(
+				sourceSet);
+		new DslObject(sourceSet).getConvention().getPlugins().put(
+				BaseClassesVirtualDirectory.NAME, baseDirectoryDelegate);
+		// Add the patched source to the all source list
+		sourceSet.getAllSource().srcDir(
+				baseDirectoryDelegate.getPatchSettings()
+						.getPatchedSourceFolderCallable());
+
+		ExtractOriginalClassesTask extractOrigTask = (ExtractOriginalClassesTask) tasks
+				.getByName("extractOriginalBaseClasses");
+
+		// Create the new tasks
+		String genTaskName = sourceSet.getTaskName("generate", "BasePatches");
+		String applyTaskName = sourceSet.getTaskName("apply", "BasePatches");
+
+		GenerateBasePatchesTask genTask = tasks.create(
+				genTaskName, GenerateBasePatchesTask.class);
+		genTask.setDescription("Generates the " + sourceSet.getName()
+				+ " base patches.");
+		genTask.dependsOn(extractOrigTask);
+
+		ApplyBasePatchesTask applyTask = tasks.create(
+				applyTaskName, ApplyBasePatchesTask.class);
+		applyTask.setDescription("Applies the " + sourceSet.getName()
+				+ " base patches.");
+		applyTask.dependsOn(extractOrigTask);
+
+		// Set the default locations for the tasks (so that the user doesn't
+		// need to specify them)
+		//genTask.setPatchesFolder(baseDirectoryDelegate.getSource());
+		//genTask.
+
+		// Order the tasks
+		tasks.getByName(sourceSet.getCompileJavaTaskName()).dependsOn(genTask);
+		// TODO: What else do I want?  SourceJar?
+
+		// Tell the java plugin to compile the patched source
+		sourceSet.getJava().srcDir(
+				baseDirectoryDelegate.getPatchSettings()
+						.getPatchedSourceFolderCallable());
 	}
 
 	@Override
 	protected void afterEvaluate() {
 		final Task classesTask = project.getTasks().getByName("classes");
-		classesTask.dependsOn("baseClasses");
+		//classesTask.dependsOn("baseClasses");
 		System.out.println(classesTask);
 		final Jar jarTask = (Jar) project.getTasks().getByName("jar");
-		
+
 		if (this.hasClientRun()) {
 			JavaExec exec = (JavaExec) project.getTasks()
 					.getByName("runClient");
@@ -113,34 +186,34 @@ public class WatPlugin extends
 	}
 
 	@Override
-	protected String getClientTweaker(WatExtension ext) {
+	protected String getClientTweaker(BaseEditExtension ext) {
 		return "";
 	}
 
 	@Override
-	protected String getClientRunClass(WatExtension ext) {
+	protected String getClientRunClass(BaseEditExtension ext) {
 		return "Start";
 	}
 
 	@Override
-	protected String getServerTweaker(WatExtension ext) {
+	protected String getServerTweaker(BaseEditExtension ext) {
 		// Not designed for server use, yet
 		return "";
 	}
 
 	@Override
-	protected String getServerRunClass(WatExtension ext) {
+	protected String getServerRunClass(BaseEditExtension ext) {
 		// Not designed for server use, yet
 		return "";
 	}
 
 	@Override
-	protected List<String> getClientJvmArgs(WatExtension ext) {
+	protected List<String> getClientJvmArgs(BaseEditExtension ext) {
 		return ext.getResolvedClientJvmArgs();
 	}
 
 	@Override
-	protected List<String> getServerJvmArgs(WatExtension ext) {
+	protected List<String> getServerJvmArgs(BaseEditExtension ext) {
 		return ext.getResolvedServerJvmArgs();
 	}
 }

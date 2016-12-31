@@ -1,4 +1,4 @@
-package pokechu22.test;
+package pokechu22.test.begradle;
 
 import groovy.lang.Closure;
 import net.minecraftforge.gradle.user.UserBaseExtension;
@@ -8,11 +8,11 @@ import org.gradle.jvm.tasks.Jar;
 
 import com.google.common.base.Strings;
 
-public class WatExtension extends UserBaseExtension {
-	public final WatPlugin plugin;
+public class BaseEditExtension extends UserBaseExtension {
+	public final BaseEditPlugin plugin;
 	private Asdf bla = new Asdf();
 
-	public WatExtension(WatPlugin plugin) {
+	public BaseEditExtension(BaseEditPlugin plugin) {
 		super(plugin);
 		this.plugin = plugin;
 	}

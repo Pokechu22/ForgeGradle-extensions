@@ -1,11 +1,13 @@
-package pokechu22.test;
+package pokechu22.test.begradle;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.List;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -17,21 +19,21 @@ import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
-public class BaseClassesTask extends DefaultTask {
-	public BaseClassesTask() {
+public class ExtractOriginalClassesTask extends DefaultTask {
+	public ExtractOriginalClassesTask() {
 		this.onlyIf(new Spec<Task>() {
 			@Override
 			public boolean isSatisfiedBy(Task element) {
-				return !((BaseClassesTask)element).classList.isEmpty();
+				return !((ExtractOriginalClassesTask)element).classList.isEmpty();
 			}
 		});
 	}
 
-	private List<String> classList;
+	private Set<String> classList = new HashSet<>();
 	private Object inJar;
 
 	@Input
-	public List<String> getClassList() {
+	public Set<String> getClassList() {
 		return classList;
 	}
 	
@@ -40,8 +42,16 @@ public class BaseClassesTask extends DefaultTask {
 		return getProject().file(this.getTemporaryDir());
 	}
 
-	public void setClassList(List<String> classList) {
+	public void setClassList(Set<String> classList) {
 		this.classList = classList;
+	}
+
+	public void addClass(String clazz) {
+		this.classList.add(clazz);
+	}
+
+	public void addClasses(Collection<String> classes) {
+		this.classList.addAll(classes);
 	}
 
 	@TaskAction
