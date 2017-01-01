@@ -11,7 +11,7 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-import net.minecraftforge.gradle.user.TaskRecompileMc;
+import net.minecraftforge.gradle.tasks.DeobfuscateJar;
 import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 
 import org.gradle.api.Action;
@@ -50,17 +50,6 @@ public class BaseEditPlugin extends
 		final Jar sourceJar = (Jar) tasks.getByName("sourceJar");
 		sourceJar.setBaseName(baseName);
 
-		final TaskRecompileMc recompTask = (TaskRecompileMc) tasks.getByName("recompileMc");
-
-		final ExtractOriginalClassesTask baseTask = makeTask("extractBaseClasses", ExtractOriginalClassesTask.class);
-		baseTask.setJar(new Callable<File>() {
-			@Override
-			public File call() throws Exception {
-				return recompTask.getInSources();
-			}
-		});
-		baseTask.dependsOn("deobfMcMCP");
-
 		// Loosely based on AntlrPlugin.  Add new options to each sourceset.
 		project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
 				.all(new Action<SourceSet>() {
@@ -86,11 +75,9 @@ public class BaseEditPlugin extends
 				BaseClassesVirtualDirectory.NAME, baseDirectoryDelegate);
 		// Add the patched source to the all source list
 		sourceSet.getAllSource().srcDir(
-				baseDirectoryDelegate.getPatchSettings()
-						.getPatchedSourceFolderCallable());
+				baseDirectoryDelegate.getPatchedSourceCallable());
 
-		ExtractOriginalClassesTask extractOrigTask = (ExtractOriginalClassesTask) tasks
-				.getByName("extractOriginalBaseClasses");
+		final DeobfuscateJar deobfTask = (DeobfuscateJar) tasks.getByName("deobfMcMCP");
 
 		// Create the new tasks
 		String genTaskName = sourceSet.getTaskName("generate", "BasePatches");
@@ -100,18 +87,33 @@ public class BaseEditPlugin extends
 				genTaskName, GenerateBasePatchesTask.class);
 		genTask.setDescription("Generates the " + sourceSet.getName()
 				+ " base patches.");
-		genTask.dependsOn(extractOrigTask);
+		genTask.dependsOn(deobfTask);
 
 		ApplyBasePatchesTask applyTask = tasks.create(
 				applyTaskName, ApplyBasePatchesTask.class);
 		applyTask.setDescription("Applies the " + sourceSet.getName()
 				+ " base patches.");
-		applyTask.dependsOn(extractOrigTask);
+		applyTask.dependsOn(deobfTask);
 
 		// Set the default locations for the tasks (so that the user doesn't
 		// need to specify them)
-		//genTask.setPatchesFolder(baseDirectoryDelegate.getSource());
-		//genTask.
+		genTask.setPatches(baseDirectoryDelegate.getPatches());
+		genTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
+		genTask.setOrigJar(new Callable<File>() {
+			@Override
+			public File call() throws Exception {
+				return deobfTask.getOutJar();
+			}
+		});
+
+		applyTask.setPatches(baseDirectoryDelegate.getPatches());
+		applyTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
+		applyTask.setOrigJar(new Callable<File>() {
+			@Override
+			public File call() throws Exception {
+				return deobfTask.getOutJar();
+			}
+		});
 
 		// Order the tasks
 		tasks.getByName(sourceSet.getCompileJavaTaskName()).dependsOn(genTask);
@@ -119,8 +121,7 @@ public class BaseEditPlugin extends
 
 		// Tell the java plugin to compile the patched source
 		sourceSet.getJava().srcDir(
-				baseDirectoryDelegate.getPatchSettings()
-						.getPatchedSourceFolderCallable());
+				baseDirectoryDelegate.getPatchedSourceCallable());
 	}
 
 	@Override

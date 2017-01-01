@@ -1,13 +1,15 @@
 package pokechu22.test.begradle;
 
+import java.util.concurrent.Callable;
+
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.util.ConfigureUtil;
 
 import groovy.lang.Closure;
 
 /**
- * A "virtual directory" handler which injects base classes into the project's
- * various source sets.
+ * A "virtual directory" handler which manages settings for the base classes,
+ * and injects them into the project's various source sets.
  * 
  * @see org.gradle.api.plugins.antlr.AntlrSourceVirtualDirectory
  *      AntlrSourceVirtualDirectory
@@ -18,18 +20,56 @@ public class BaseClassesVirtualDirectory {
 	public static final String NAME = "base";
 
 	BaseClassesVirtualDirectory(SourceSet sourceSet) {
-		this.base = new BasePatchSettings(sourceSet.getName());
+		String sourceSetName = sourceSet.getName();
+		this.patches = "src/" + sourceSetName + "/base-patches";
+		this.patchedSource = "src/" + sourceSetName + "/base";
 	}
 
-	private final BasePatchSettings base;
+	private Object patches;
+	private Object patchedSource;
+
+	public void setPatches(Object folder) {
+		this.patches = folder;
+	}
+
+	public Object getPatches() {
+		return patches;
+	}
 
 	/**
-	 * Gets the {@link BasePatchSettings} associated with this directory.
+	 * Gets a {@link Callable} that returns the value of {@link #getPatches}.
 	 * 
-	 * @return The base patch settings
+	 * @return A callable that expands to {@link #getPatches}
 	 */
-	public BasePatchSettings getPatchSettings() {
-		return base;
+	Callable<Object> getPatchesCallable() {
+		return new Callable<Object>() {
+			@Override
+			public Object call() throws Exception {
+				return getPatches();
+			}
+		};
+	}
+
+	public void setPatchedSource(Object folder) {
+		this.patchedSource = folder;
+	}
+
+	public Object getPatchedSource() {
+		return patchedSource;
+	}
+
+	/**
+	 * Gets a {@link Callable} that returns the value of {@link #getPatchedSource}.
+	 * 
+	 * @return A callable that expands to {@link #getPatchedSource}
+	 */
+	Callable<Object> getPatchedSourceCallable() {
+		return new Callable<Object>() {
+			@Override
+			public Object call() throws Exception {
+				return getPatchedSource();
+			}
+		};
 	}
 
 	/**
@@ -40,7 +80,7 @@ public class BaseClassesVirtualDirectory {
 	 * @return {@code this}
 	 */
 	public BaseClassesVirtualDirectory base(Closure<?> configureClosure) {
-		ConfigureUtil.configure(configureClosure, base);
+		ConfigureUtil.configure(configureClosure, this);
 		return this;
 	}
 }
