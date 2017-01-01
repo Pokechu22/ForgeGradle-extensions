@@ -1,5 +1,7 @@
 package pokechu22.test.begradle;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 
 import org.gradle.api.tasks.SourceSet;
@@ -23,10 +25,12 @@ public class BaseClassesVirtualDirectory {
 		String sourceSetName = sourceSet.getName();
 		this.patches = "src/" + sourceSetName + "/base-patches";
 		this.patchedSource = "src/" + sourceSetName + "/base";
+		this.baseClasses = new ArrayList<>();
 	}
 
 	private Object patches;
 	private Object patchedSource;
+	private List<String> baseClasses;
 
 	public void setPatches(Object folder) {
 		this.patches = folder;
@@ -68,6 +72,28 @@ public class BaseClassesVirtualDirectory {
 			@Override
 			public Object call() throws Exception {
 				return getPatchedSource();
+			}
+		};
+	}
+
+	public void setBaseClasses(List<String> value) {
+		this.baseClasses = value;
+	}
+
+	public List<String> getBaseClasses() {
+		return baseClasses;
+	}
+
+	/**
+	 * Gets a {@link Callable} that returns the value of {@link #getBaseClasses}.
+	 * 
+	 * @return A callable that expands to {@link #getBaseClasses}
+	 */
+	Callable<List<String>> getBaseClassesCallable() {
+		return new Callable<List<String>>() {
+			@Override
+			public List<String> call() throws Exception {
+				return getBaseClasses();
 			}
 		};
 	}

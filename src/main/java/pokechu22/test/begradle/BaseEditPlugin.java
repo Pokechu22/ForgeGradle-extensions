@@ -105,6 +105,7 @@ public class BaseEditPlugin extends
 				return deobfTask.getOutJar();
 			}
 		});
+		genTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
 
 		applyTask.setPatches(baseDirectoryDelegate.getPatches());
 		applyTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
@@ -114,6 +115,7 @@ public class BaseEditPlugin extends
 				return deobfTask.getOutJar();
 			}
 		});
+		applyTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
 
 		// Order the tasks
 		tasks.getByName(sourceSet.getCompileJavaTaskName()).dependsOn(genTask);
