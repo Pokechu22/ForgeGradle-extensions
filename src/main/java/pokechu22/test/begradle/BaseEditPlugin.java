@@ -11,7 +11,8 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-import net.minecraftforge.gradle.tasks.DeobfuscateJar;
+import net.minecraftforge.gradle.user.TaskRecompileMc;
+import net.minecraftforge.gradle.user.UserConstants;
 import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 
 import org.gradle.api.Action;
@@ -77,7 +78,7 @@ public class BaseEditPlugin extends
 		sourceSet.getAllSource().srcDir(
 				baseDirectoryDelegate.getPatchedSourceCallable());
 
-		final DeobfuscateJar deobfTask = (DeobfuscateJar) tasks.getByName("deobfMcMCP");
+		final TaskRecompileMc recompTask = (TaskRecompileMc) tasks.getByName(UserConstants.TASK_RECOMPILE);
 
 		// Create the new tasks
 		String genTaskName = sourceSet.getTaskName("generate", "BasePatches");
@@ -87,13 +88,13 @@ public class BaseEditPlugin extends
 				genTaskName, GenerateBasePatchesTask.class);
 		genTask.setDescription("Generates the " + sourceSet.getName()
 				+ " base patches.");
-		genTask.dependsOn(deobfTask);
+		genTask.dependsOn(recompTask);
 
 		ApplyBasePatchesTask applyTask = tasks.create(
 				applyTaskName, ApplyBasePatchesTask.class);
 		applyTask.setDescription("Applies the " + sourceSet.getName()
 				+ " base patches.");
-		applyTask.dependsOn(deobfTask);
+		applyTask.dependsOn(recompTask);
 
 		// Set the default locations for the tasks (so that the user doesn't
 		// need to specify them)
@@ -102,7 +103,7 @@ public class BaseEditPlugin extends
 		genTask.setOrigJar(new Callable<File>() {
 			@Override
 			public File call() throws Exception {
-				return deobfTask.getOutJar();
+				return recompTask.getInSources();
 			}
 		});
 		genTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
@@ -112,7 +113,7 @@ public class BaseEditPlugin extends
 		applyTask.setOrigJar(new Callable<File>() {
 			@Override
 			public File call() throws Exception {
-				return deobfTask.getOutJar();
+				return recompTask.getInSources();
 			}
 		});
 		applyTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());

@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.concurrent.Callable;
 
 import org.gradle.api.DefaultTask;
+import org.gradle.api.Task;
+import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.InputFile;
@@ -16,6 +18,16 @@ public class ApplyBasePatchesTask extends DefaultTask {
 	private Object patchedSource;
 	private Object origJar;
 	private Callable<List<String>> baseClasses;
+
+	public ApplyBasePatchesTask() {
+		this.onlyIf(new Spec<Task>() {
+			@Override
+			public boolean isSatisfiedBy(Task element) {
+				// If there are no base classes, do nothing.
+				return !((ApplyBasePatchesTask) element).getBaseClasses().isEmpty();
+			}
+		});
+	}
 
 	/**
 	 * Sets the path to the folder to put patches.
