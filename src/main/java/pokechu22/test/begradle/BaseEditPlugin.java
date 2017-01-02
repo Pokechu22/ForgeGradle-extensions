@@ -6,12 +6,17 @@ import static net.minecraftforge.gradle.common.Constants.MCP_PATCHES_CLIENT;
 import static net.minecraftforge.gradle.common.Constants.REPLACE_CACHE_DIR;
 import static net.minecraftforge.gradle.common.Constants.REPLACE_MC_VERSION;
 import static net.minecraftforge.gradle.common.Constants.TASK_DL_CLIENT;
+import static net.minecraftforge.gradle.common.Constants.USER_AGENT;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-import net.minecraftforge.gradle.user.TaskRecompileMc;
+import net.minecraftforge.gradle.tasks.RemapSources;
 import net.minecraftforge.gradle.user.UserConstants;
 import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 
@@ -23,6 +28,12 @@ import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.jvm.tasks.Jar;
+
+import com.google.common.base.Charsets;
+import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
+import com.google.common.io.ByteStreams;
+import com.google.common.io.Files;
 
 public class BaseEditPlugin extends
 		UserVanillaBasePlugin<BaseEditExtension> {
@@ -78,7 +89,8 @@ public class BaseEditPlugin extends
 		sourceSet.getAllSource().srcDir(
 				baseDirectoryDelegate.getPatchedSourceCallable());
 
-		final TaskRecompileMc recompTask = (TaskRecompileMc) tasks.getByName(UserConstants.TASK_RECOMPILE);
+		// XXX should I be depending on this?  Or decomp?  Or another one?
+		final RemapSources remapTask = (RemapSources) tasks.getByName(UserConstants.TASK_REMAP);
 
 		// Create the new tasks
 		String genTaskName = sourceSet.getTaskName("generate", "BasePatches");
@@ -88,13 +100,13 @@ public class BaseEditPlugin extends
 				genTaskName, GenerateBasePatchesTask.class);
 		genTask.setDescription("Generates the " + sourceSet.getName()
 				+ " base patches.");
-		genTask.dependsOn(recompTask);
+		genTask.dependsOn(remapTask);
 
 		ApplyBasePatchesTask applyTask = tasks.create(
 				applyTaskName, ApplyBasePatchesTask.class);
 		applyTask.setDescription("Applies the " + sourceSet.getName()
 				+ " base patches.");
-		applyTask.dependsOn(recompTask);
+		applyTask.dependsOn(remapTask);
 
 		// Set the default locations for the tasks (so that the user doesn't
 		// need to specify them)
@@ -103,7 +115,7 @@ public class BaseEditPlugin extends
 		genTask.setOrigJar(new Callable<File>() {
 			@Override
 			public File call() throws Exception {
-				return recompTask.getInSources();
+				return remapTask.getOutJar();
 			}
 		});
 		genTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
@@ -113,7 +125,7 @@ public class BaseEditPlugin extends
 		applyTask.setOrigJar(new Callable<File>() {
 			@Override
 			public File call() throws Exception {
-				return recompTask.getInSources();
+				return remapTask.getOutJar();
 			}
 		});
 		applyTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
@@ -219,5 +231,110 @@ public class BaseEditPlugin extends
 	@Override
 	protected List<String> getServerJvmArgs(BaseEditExtension ext) {
 		return ext.getResolvedServerJvmArgs();
+	}
+
+	/**
+	 * Gets a file, checking if it's up-to-date with an etag.
+	 * 
+	 * Copied from the superclass, except for a few small modifications...
+	 * Basically: STOP TOUCHING THE MAIN FILE. It seems that
+	 * {@link net.minecraftforge.gradle.tasks.PostDecompileTask
+	 * PostDecompileTask} incorrectly reruns when that happens, causing much
+	 * slower builds. Instead the etag file's modified date is used to implement
+	 * the 1-minute cooldown.
+	 * 
+	 * @param strUrl
+	 *            The URL of the file to get
+	 * @param cache
+	 *            The cached version of the file. May not exist.
+	 * @param etagFile
+	 *            The etag file.
+	 * @see net.minecraftforge.gradle.common.BasePlugin#getWithEtag
+	 * @author Whoever wrote the base version (not me)
+	 */
+	@Override
+	protected String getWithEtag(String strUrl, File cache, File etagFile) {
+		try {
+			if (project.getGradle().getStartParameter().isOffline()) {
+				// In offline mode, don't even try the internet; always
+				// return the cached version.
+				return Files.toString(cache, Charsets.UTF_8);
+			}
+
+			if (etagFile.exists() && etagFile.lastModified() + 60_000 >= System
+							.currentTimeMillis()) {
+				// The file changed less than a minute ago!  Probably won't have
+				// changed again.
+				return Files.toString(cache, Charsets.UTF_8);
+			}
+
+			String etag;
+			if (etagFile.exists()) {
+				etag = Files.toString(etagFile, Charsets.UTF_8);
+			} else {
+				etagFile.getParentFile().mkdirs();
+				etag = "";
+			}
+
+			URL url = new URL(strUrl);
+
+			HttpURLConnection con = (HttpURLConnection) url.openConnection();
+			con.setInstanceFollowRedirects(true);
+			con.setRequestProperty("User-Agent", USER_AGENT);
+			con.setIfModifiedSince(cache.lastModified());
+
+			if (!Strings.isNullOrEmpty(etag)) {
+				con.setRequestProperty("If-None-Match", etag);
+			}
+
+			con.connect();
+
+			String out = null;
+			if (con.getResponseCode() == HttpURLConnection.HTTP_NOT_MODIFIED) {
+				// 304 Not Modified - use the etag
+				// Touch the etag file so that the cooldown applies.
+				// Changed from Files.touch(cache);
+				Files.touch(etagFile);
+				out = Files.toString(cache, Charsets.UTF_8);
+			} else if (con.getResponseCode() == HttpURLConnection.HTTP_OK) {
+				// 200 OK
+				InputStream stream = con.getInputStream();
+				byte[] data = ByteStreams.toByteArray(stream);
+				Files.write(data, cache);
+				stream.close();
+
+				// Write the etag, if present
+				etag = con.getHeaderField("ETag");
+				if (Strings.isNullOrEmpty(etag)) {
+					// Touch it so that the 1-minute check still triggers, at least.
+					Files.touch(etagFile);
+				} else {
+					Files.write(etag, etagFile, Charsets.UTF_8);
+				}
+
+				out = new String(data);
+			} else {
+				project.getLogger().error(
+						"Etag download for " + strUrl + " failed with code "
+								+ con.getResponseCode());
+			}
+
+			con.disconnect();
+
+			return out;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		if (cache.exists()) {
+			try {
+				return Files.toString(cache, Charsets.UTF_8);
+			} catch (IOException e) {
+				Throwables.propagate(e);
+			}
+		}
+
+		throw new RuntimeException("Unable to obtain url (" + strUrl
+				+ ") with etag!");
 	}
 }
