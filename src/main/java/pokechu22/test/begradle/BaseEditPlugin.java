@@ -88,23 +88,40 @@ public class BaseEditPlugin extends
 		final RemapSources remapTask = (RemapSources) tasks.getByName(UserConstants.TASK_REMAP);
 
 		// Create the new tasks
+		String processTaskName = sourceSet.getTaskName("process", "BasePatches");
 		String genTaskName = sourceSet.getTaskName("generate", "BasePatches");
 		String applyTaskName = sourceSet.getTaskName("apply", "BasePatches");
 
+		ProcessBasePatchesTask processTask = tasks.create(
+				processTaskName, ProcessBasePatchesTask.class);
+		processTask.setDescription("Processes all of the " + sourceSet.getName()
+				+ " base patches, applying and generating them as needed.");
+		processTask.dependsOn(remapTask);
+
 		GenerateBasePatchesTask genTask = tasks.create(
 				genTaskName, GenerateBasePatchesTask.class);
-		genTask.setDescription("Generates the " + sourceSet.getName()
-				+ " base patches.");
+		genTask.setDescription("Generates all of the " + sourceSet.getName()
+				+ " base patches, removing any existing ones.");
 		genTask.dependsOn(remapTask);
 
 		ApplyBasePatchesTask applyTask = tasks.create(
 				applyTaskName, ApplyBasePatchesTask.class);
-		applyTask.setDescription("Applies the " + sourceSet.getName()
-				+ " base patches.");
+		applyTask.setDescription("Applies all of the " + sourceSet.getName()
+				+ " base patches, overwriting any other modified source.");
 		applyTask.dependsOn(remapTask);
 
 		// Set the default locations for the tasks (so that the user doesn't
 		// need to specify them)
+		processTask.setPatches(baseDirectoryDelegate.getPatches());
+		processTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
+		processTask.setOrigJar(new Callable<File>() {
+			@Override
+			public File call() throws Exception {
+				return remapTask.getOutJar();
+			}
+		});
+		processTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
+
 		genTask.setPatches(baseDirectoryDelegate.getPatches());
 		genTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
 		genTask.setOrigJar(new Callable<File>() {
@@ -126,7 +143,7 @@ public class BaseEditPlugin extends
 		applyTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
 
 		// Order the tasks
-		tasks.getByName(sourceSet.getCompileJavaTaskName()).dependsOn(genTask);
+		tasks.getByName(sourceSet.getCompileJavaTaskName()).dependsOn(processTask);
 		// TODO: What else do I want?  SourceJar?
 
 		// Tell the java plugin to compile the patched source

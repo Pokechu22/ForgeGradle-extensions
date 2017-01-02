@@ -3,12 +3,15 @@ package pokechu22.test.begradle;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.InvalidUserDataException;
@@ -16,6 +19,10 @@ import org.gradle.api.Task;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFile;
+
+import difflib.DiffUtils;
+import difflib.Patch;
+import difflib.PatchFailedException;
 
 /**
  * A task that works with patches (applying or generating).
@@ -184,5 +191,77 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 	protected JarEntry getJarEntry(String className, JarFile jar) {
 		String path = className.replace('.', '/') + ".java";
 		return jar.getJarEntry(path);
+	}
+
+	/**
+	 * Applies a patch to the class.
+	 *
+	 * @param className The name of the class to patch (java-style)
+	 * @param jar The jar containing unmodified base sources.
+	 * @throws IOException When an IO problem occurs
+	 */
+	protected void applyPatch(String className, JarFile jar) throws IOException {
+		File sourceFile = getPatchedSource(className);
+		File patchFile = getPatch(className);
+
+		List<String> newContent;
+
+		List<String> origContent;
+		try (InputStream input = jar.getInputStream(getJarEntry(className, jar))) {
+			origContent = IOUtils.readLines(input, "UTF-8");
+		}
+
+		if (patchFile.exists()) {
+			getLogger().lifecycle("Applying patch for {} to {} from {}",
+					className, sourceFile, patchFile);
+
+			List<String> diff = FileUtils.readLines(patchFile, "UTF-8");
+			Patch<String> patch = DiffUtils.parseUnifiedDiff(diff);
+
+			try {
+				newContent = DiffUtils.patch(origContent, patch);
+			} catch (PatchFailedException e) {
+				getLogger().warn("Pating failed for " + className + "!", e);
+				getLogger().warn("Saving unpatched version instead...");
+				newContent = origContent;
+			}
+		} else {
+			getLogger().lifecycle("Copying original {} as no patch exists",
+					className);
+
+			newContent = origContent;
+		}
+
+		FileUtils.writeLines(sourceFile, newContent);
+	}
+
+	/**
+	 * Makes a patch for the given class.
+	 *
+	 * @param className The name of the class to make a patch for (java-style)
+	 * @param jar The jar containing unmodified base sources.
+	 * @throws IOException When an IO problem occurs
+	 */
+	protected void genPatch(String className, JarFile jar) throws IOException {
+		File sourceFile = getPatchedSource(className);
+		File patchFile = getPatch(className);
+		// For the unified diff
+		String filename = className.replace('.', '/') + ".java";
+
+		getLogger().lifecycle("Generating patch for {} from {} to {}",
+				className, sourceFile, patchFile);
+
+		List<String> origContent;
+		try (InputStream input = jar.getInputStream(getJarEntry(className, jar))) {
+			origContent = IOUtils.readLines(input, "UTF-8");
+		}
+
+		List<String> newContent = FileUtils.readLines(sourceFile, "UTF-8");
+
+		Patch<String> patch = DiffUtils.diff(origContent, newContent);
+		List<String> diff = DiffUtils.generateUnifiedDiff(filename,
+				filename, origContent, patch, 3);
+
+		FileUtils.writeLines(patchFile, diff);
 	}
 }
