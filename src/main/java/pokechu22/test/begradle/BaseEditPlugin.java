@@ -11,14 +11,17 @@ import static net.minecraftforge.gradle.common.Constants.USER_AGENT;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
 import java.util.concurrent.Callable;
 
+import net.minecraftforge.gradle.common.BasePlugin;
 import net.minecraftforge.gradle.tasks.RemapSources;
 import net.minecraftforge.gradle.user.UserConstants;
 import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
+import net.minecraftforge.gradle.util.json.version.Version;
 
 import org.gradle.api.Action;
 import org.gradle.api.Task;
@@ -208,7 +211,21 @@ public class BaseEditPlugin extends
 
 	@Override
 	protected String getClientRunClass(BaseEditExtension ext) {
-		return "Start";
+		// Just directly call the client main class (which also needs to be
+		// accessed from a private field...)
+		try {
+			Field versionField = BasePlugin.class.getDeclaredField("mcVersionJson");
+			versionField.setAccessible(true);
+			Version version = (Version) versionField.get(this);
+			if (version == null) {
+				throw new RuntimeException("mcVersionJson was null");
+			}
+			return version.mainClass;
+		} catch (Exception e) {
+			project.getLogger().warn("Failed to get version main class", e);
+			// This is usually the main class
+			return "net.minecraft.client.main.Main";
+		}
 	}
 
 	@Override
