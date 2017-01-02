@@ -237,11 +237,11 @@ public class BaseEditPlugin extends
 	 * Gets a file, checking if it's up-to-date with an etag.
 	 * 
 	 * Copied from the superclass, except for a few small modifications...
-	 * Basically: STOP TOUCHING THE MAIN FILE. It seems that
+	 * Basically: STOP TOUCHING THE FILES. It seems that
 	 * {@link net.minecraftforge.gradle.tasks.PostDecompileTask
 	 * PostDecompileTask} incorrectly reruns when that happens, causing much
-	 * slower builds. Instead the etag file's modified date is used to implement
-	 * the 1-minute cooldown.
+	 * slower builds. This means that the 1-minute cooldown no longer applies,
+	 * unfortunately.
 	 * 
 	 * @param strUrl
 	 *            The URL of the file to get
@@ -258,13 +258,6 @@ public class BaseEditPlugin extends
 			if (project.getGradle().getStartParameter().isOffline()) {
 				// In offline mode, don't even try the internet; always
 				// return the cached version.
-				return Files.toString(cache, Charsets.UTF_8);
-			}
-
-			if (etagFile.exists() && etagFile.lastModified() + 60_000 >= System
-							.currentTimeMillis()) {
-				// The file changed less than a minute ago!  Probably won't have
-				// changed again.
 				return Files.toString(cache, Charsets.UTF_8);
 			}
 
@@ -291,10 +284,7 @@ public class BaseEditPlugin extends
 
 			String out = null;
 			if (con.getResponseCode() == HttpURLConnection.HTTP_NOT_MODIFIED) {
-				// 304 Not Modified - use the etag
-				// Touch the etag file so that the cooldown applies.
-				// Changed from Files.touch(cache);
-				Files.touch(etagFile);
+				// 304 Not Modified - use the etag'd version
 				out = Files.toString(cache, Charsets.UTF_8);
 			} else if (con.getResponseCode() == HttpURLConnection.HTTP_OK) {
 				// 200 OK
@@ -305,10 +295,7 @@ public class BaseEditPlugin extends
 
 				// Write the etag, if present
 				etag = con.getHeaderField("ETag");
-				if (Strings.isNullOrEmpty(etag)) {
-					// Touch it so that the 1-minute check still triggers, at least.
-					Files.touch(etagFile);
-				} else {
+				if (!Strings.isNullOrEmpty(etag)) {
 					Files.write(etag, etagFile, Charsets.UTF_8);
 				}
 
