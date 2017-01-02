@@ -3,185 +3,62 @@ package pokechu22.test.begradle;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.gradle.api.DefaultTask;
 import org.gradle.api.InvalidUserDataException;
-import org.gradle.api.Task;
-import org.gradle.api.specs.Spec;
-import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
-import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
 import difflib.DiffUtils;
 import difflib.Patch;
 
-public class GenerateBasePatchesTask extends DefaultTask {
-	private Object patches;
-	private Object patchedSource;
-	private Object origJar;
-	private Callable<List<String>> baseClasses;
-
-	public GenerateBasePatchesTask() {
-		this.onlyIf(new Spec<Task>() {
-			@Override
-			public boolean isSatisfiedBy(Task element) {
-				// If there are no base classes, do nothing.
-				return !((GenerateBasePatchesTask) element).getBaseClasses().isEmpty();
-			}
-		});
-	}
-
-	/**
-	 * Sets the path to the folder to put patches.
-	 */
-	public void setPatches(Object folder) {
-		this.patches = folder;
-	}
+public class GenerateBasePatchesTask extends AbstractPatchingTask {
+	// Add annotations to the right methods
 	@OutputDirectory
 	public File getPatches() {
-		return getProject().file(this.patches);
+		return super.getPatches();
 	}
-	/**
-	 * Sets the path to the folder containing modified source.
-	 */
-	public void setPatchedSource(Object folder) {
-		this.patchedSource = folder;
-	}
-	/**
-	 * Gets the folder where modified source is.
-	 */
 	@InputDirectory
 	public File getPatchedSource() {
-		return getProject().file(patchedSource);
-	}
-	/**
-	 * Sets the path to the unmodified, original deobfuscated source jar.
-	 */
-	public void setOrigJar(Object value) {
-		this.origJar = value;
-	}
-	/**
-	 * Gets the jar containing the unmodified, original deobfuscated source.
-	 */
-	@InputFile
-	public File getOrigJar() {
-		 return getProject().file(this.origJar);
-	}
-	/**
-	 * Sets the list of modified base classes.
-	 */
-	public void setBaseClasses(Callable<List<String>> value) {
-		this.baseClasses = value;
-	}
-	/**
-	 * Gets the list of modified base classes.
-	 */
-	@Input
-	public List<String> getBaseClasses() {
-		try {
-			return this.baseClasses.call();
-		} catch (Exception e) {
-			throw new RuntimeException("Exception while getting baseClasses", e);
-		}
+		return super.getPatchedSource();
 	}
 
 	@TaskAction
 	public void doTask() throws InvalidUserDataException, IOException {
-		List<String> baseClasses = getBaseClasses();
-		File outDir = getPatches();
-		if (outDir.exists() && !outDir.isDirectory()) {
-			throw new InvalidUserDataException(
-					"Patches folder must be a directory!  (was: " + outDir + ")");
-		}
-		File inDir = getPatchedSource();
-		if (inDir.exists() && !inDir.isDirectory()) {
-			throw new InvalidUserDataException(
-					"Modified base source folder must be a directory!  (was: "
-							+ inDir + ")");
-		}
-
 		File origJar = getOrigJar();
+		List<String> baseClasses = getBaseClasses();
 
 		try (JarFile jar = new JarFile(origJar)) {
-			Map<String, String> classPaths = new HashMap<>();
-			// Convert class names into file paths.
-			// We store the names in a map rather than computing them later so that
-			// we can be sure all of the names are valid beforehand.
-			for (String className : baseClasses) {
-				classPaths.put(className, getPathForClass(className, jar));
-			}
-
 			// TODO: Do I want to back these up in some way?
 			getLogger().lifecycle("Removing old patches...");
-			FileUtils.cleanDirectory(outDir);
+			FileUtils.cleanDirectory(getPatches());
 
 			for (String className : baseClasses) {
-				String classPath = classPaths.get(className);
-				String patchName = className + ".patch";
+				File sourceFile = getPatchedSource(className);
+				File patchFile = getPatch(className);
+				// For the unified diff
+				String filename = className.replace('.', '/') + ".java";
 
-				// Build the path to the modified class
-				File modifiedClassFile = inDir;
-				for (String fragment : classPath.split("/")) {
-					modifiedClassFile = new File(modifiedClassFile, fragment);
-				}
-
-				File patchFile = new File(outDir, patchName);
-
-				getLogger().lifecycle("Generating patch for {} as {}", className, patchName);
+				getLogger().lifecycle("Generating patch for {} from {} to {}",
+						className, sourceFile, patchFile);
 
 				List<String> origContent;
-				try (InputStream input = jar.getInputStream(jar.getJarEntry(classPath))) {
+				try (InputStream input = jar.getInputStream(getJarEntry(className, jar))) {
 					origContent = IOUtils.readLines(input, "UTF-8");
 				}
 
-				List<String> newContent = FileUtils.readLines(modifiedClassFile, "UTF-8");
+				List<String> newContent = FileUtils.readLines(sourceFile, "UTF-8");
 
 				Patch<String> patch = DiffUtils.diff(origContent, newContent);
-				List<String> diff = DiffUtils.generateUnifiedDiff(classPath,
-						classPath, origContent, patch, 3);
+				List<String> diff = DiffUtils.generateUnifiedDiff(filename,
+						filename, origContent, patch, 3);
 
 				FileUtils.writeLines(patchFile, diff);
 			}
 		}
-	}
-
-	/**
-	 * Converts a class name into a path in the jar file, checking for potential errors.
-	 * 
-	 * @param className The user-inputted name of the class
-	 * @param jar The jar to look in
-	 * @return A path within the jar file. 
-	 * @throws InvalidUserDataException on a bad path
-	 * @throws InvalidUserDataException on a nonexistant file
-	 */
-	private String getPathForClass(String className, JarFile jar)
-			throws InvalidUserDataException {
-		if (className.contains("\\") || className.contains("/")) {
-			// Enforce java-style names, mainly for convinence (and to get rid of
-			// path char issues)
-			throw new InvalidUserDataException(
-					"Class names should be java-style names (com.example.Test)"
-							+ ", not paths (com/example/Test.java)!  (Got: "
-							+ className + ")");
-		}
-		String classPath = className.replace('.', '/') + ".java";
-		// Make sure there is a file with that name.
-		JarEntry entry = jar.getJarEntry(classPath);
-		if (entry == null) {
-			throw new InvalidUserDataException("Cannot find class '"
-					+ className + "' in jar!  (Tried to find to '" + classPath
-					+ "' in '" + getOrigJar() + "')");
-		}
-		return classPath;
 	}
 }
