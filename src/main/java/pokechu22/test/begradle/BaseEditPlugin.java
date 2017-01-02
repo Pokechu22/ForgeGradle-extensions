@@ -24,7 +24,6 @@ import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 import net.minecraftforge.gradle.util.json.version.Version;
 
 import org.gradle.api.Action;
-import org.gradle.api.Task;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.JavaExec;
@@ -40,13 +39,6 @@ import com.google.common.io.Files;
 
 public class BaseEditPlugin extends
 		UserVanillaBasePlugin<BaseEditExtension> {
-
-	/*@Inject
-	public BaseEditPlugin(SourceDirectorySetFactory sourceDirectorySetFactory) {
-		this.sourceDirectorySetFactory = sourceDirectorySetFactory;
-	}
-
-	private final SourceDirectorySetFactory sourceDirectorySetFactory;*/
 
 	@Override
 	protected void applyVanillaUserPlugin() {
@@ -144,9 +136,6 @@ public class BaseEditPlugin extends
 
 	@Override
 	protected void afterEvaluate() {
-		final Task classesTask = project.getTasks().getByName("classes");
-		//classesTask.dependsOn("baseClasses");
-		System.out.println(classesTask);
 		final Jar jarTask = (Jar) project.getTasks().getByName("jar");
 
 		if (this.hasClientRun()) {
@@ -169,20 +158,12 @@ public class BaseEditPlugin extends
 	}
 
 	@Override
-	protected void setupDevTimeDeobf(final Task compileDummy,
-			final Task providedDummy) {
-		System.out.println("setupDevTimeDeobf: " + compileDummy + " / " + providedDummy);
-		super.setupDevTimeDeobf(compileDummy, providedDummy);
-	}
-
-	@Override
 	protected String getJarName() {
 		return "minecraft";
 	}
 
 	@Override
 	protected void createDecompTasks(String globalPattern, String localPattern) {
-		System.out.println("Making decomp tasks...: " + globalPattern + " / " + localPattern);
 		super.makeDecompTasks(globalPattern, localPattern,
 				delayedFile(JAR_CLIENT_FRESH), TASK_DL_CLIENT,
 				delayedFile(MCP_PATCHES_CLIENT), delayedFile(MCP_INJECT));
