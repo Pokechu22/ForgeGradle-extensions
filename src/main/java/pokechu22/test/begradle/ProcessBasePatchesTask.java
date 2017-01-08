@@ -13,6 +13,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.tasks.InputDirectory;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskValidationException;
@@ -24,11 +25,13 @@ import org.gradle.api.tasks.TaskValidationException;
 public class ProcessBasePatchesTask extends AbstractPatchingTask {
 	@InputDirectory
 	@OutputDirectory
+	@Optional
 	public File getPatches() {
 		return super.getPatches();
 	}
 	@InputDirectory
 	@OutputDirectory
+	@Optional
 	public File getPatchedSource() {
 		return super.getPatchedSource();
 	}
@@ -41,24 +44,26 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 		// Check the for undeclared patches
 		List<String> unusedPatches = new ArrayList<>(baseClasses);
 		File patches = getPatches();
-		for (File file : patches.listFiles()) {
-			if (file.isDirectory()) {
-				problems.add(err("Directory '" + file + "' in patches directory!"));
-				continue;
+		if (patches.exists()) {
+			for (File file : patches.listFiles()) {
+				if (file.isDirectory()) {
+					problems.add(err("Directory '" + file + "' in patches directory!"));
+					continue;
+				}
+				String filename = file.getName();
+				if (!filename.endsWith(".patch")) {
+					problems.add(err("Non-patch file '" + file + "' in patches directory!"));
+					continue;
+				}
+				String className = filename.substring(0, filename.length() - ".patch".length());
+				if (!baseClasses.contains(className)) {
+					problems.add(err("Patch '" + file
+							+ "' is not in the declared base class list!"));
+					continue;
+				}
+	
+				unusedPatches.remove(className);
 			}
-			String filename = file.getName();
-			if (!filename.endsWith(".patch")) {
-				problems.add(err("Non-patch file '" + file + "' in patches directory!"));
-				continue;
-			}
-			String className = filename.substring(0, filename.length() - ".patch".length());
-			if (!baseClasses.contains(className)) {
-				problems.add(err("Patch '" + file
-						+ "' is not in the declared base class list!"));
-				continue;
-			}
-
-			unusedPatches.remove(className);
 		}
 		getLogger().debug("Unused patches: " + unusedPatches);
 
@@ -112,6 +117,9 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 	private void recurseFolder(File from, String classNameSoFar,
 			List<String> baseClasses, List<String> unusedClasses,
 			List<InvalidUserDataException> problems) {
+		if (!from.exists()) {
+			return;
+		}
 		for (File file : from.listFiles()) {
 			if (file.isDirectory()) {
 				recurseFolder(file, classNameSoFar + file.getName() + ".", baseClasses,

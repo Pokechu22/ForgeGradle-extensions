@@ -204,6 +204,8 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 		File sourceFile = getPatchedSource(className);
 		File patchFile = getPatch(className);
 
+		sourceFile.getParentFile().mkdirs();
+
 		List<String> newContent;
 
 		List<String> origContent;
@@ -247,6 +249,8 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 		File patchFile = getPatch(className);
 		// For the unified diff
 		String filename = className.replace('.', '/') + ".java";
+
+		patchFile.getParentFile().mkdirs();
 
 		getLogger().lifecycle("Generating patch for {} from {} to {}",
 				className, sourceFile, patchFile);
