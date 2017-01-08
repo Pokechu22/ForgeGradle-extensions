@@ -1,12 +1,7 @@
 package pokechu22.test.begradle;
 
-import static net.minecraftforge.gradle.common.Constants.JAR_CLIENT_FRESH;
-import static net.minecraftforge.gradle.common.Constants.MCP_INJECT;
-import static net.minecraftforge.gradle.common.Constants.MCP_PATCHES_CLIENT;
-import static net.minecraftforge.gradle.common.Constants.REPLACE_CACHE_DIR;
-import static net.minecraftforge.gradle.common.Constants.REPLACE_MC_VERSION;
-import static net.minecraftforge.gradle.common.Constants.TASK_DL_CLIENT;
-import static net.minecraftforge.gradle.common.Constants.USER_AGENT;
+import static net.minecraftforge.gradle.user.UserConstants.*;
+import static net.minecraftforge.gradle.common.Constants.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -184,6 +179,11 @@ public class BaseEditPlugin extends
 		super.makeDecompTasks(globalPattern, localPattern,
 				delayedFile(JAR_CLIENT_FRESH), TASK_DL_CLIENT,
 				delayedFile(MCP_PATCHES_CLIENT), delayedFile(MCP_INJECT));
+
+		// Ensure we have a version JSON before trying to create the start task
+		// since we use the version JSON to determine the main class.
+		this.project.getTasks().getByName(TASK_MAKE_START)
+				.dependsOn(TASK_DL_VERSION_JSON);
 	}
 
 	@Override
