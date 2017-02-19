@@ -1,4 +1,4 @@
-package pokechu22.test.begradle;
+package pokechu22.test.begradle.baseedit;
 
 import java.io.File;
 import java.io.IOException;

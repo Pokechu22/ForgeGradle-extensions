@@ -1,4 +1,4 @@
-package pokechu22.test.begradle;
+package pokechu22.test.begradle.baseedit;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,15 +11,15 @@ import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
 /**
- * Task that generates all base patches, overwriting any modified base source.
+ * Task that applies all base patches, overwriting any modified base source.
  */
-public class GenerateBasePatchesTask extends AbstractPatchingTask {
+public class ApplyBasePatchesTask extends AbstractPatchingTask {
 	// Add annotations to the right methods
-	@OutputDirectory
+	@InputDirectory
 	public File getPatches() {
 		return super.getPatches();
 	}
-	@InputDirectory
+	@OutputDirectory
 	public File getPatchedSource() {
 		return super.getPatchedSource();
 	}
@@ -31,11 +31,11 @@ public class GenerateBasePatchesTask extends AbstractPatchingTask {
 
 		try (JarFile jar = new JarFile(origJar)) {
 			// TODO: Do I want to back these up in some way?
-			getLogger().lifecycle("Removing old patches...");
-			FileUtils.cleanDirectory(getPatches());
+			getLogger().lifecycle("Removing old base sources...");
+			FileUtils.cleanDirectory(getPatchedSource());
 
 			for (String className : baseClasses) {
-				genPatch(className, jar);
+				applyPatch(className, jar);
 			}
 		}
 	}

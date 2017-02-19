@@ -1,4 +1,4 @@
-package pokechu22.test.begradle;
+package pokechu22.test.begradle.baseedit;
 
 import static net.minecraftforge.gradle.user.UserConstants.*;
 import static net.minecraftforge.gradle.common.Constants.*;

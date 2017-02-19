@@ -1,4 +1,4 @@
-package pokechu22.test.begradle;
+package pokechu22.test.begradle.baseedit;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
