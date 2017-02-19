@@ -1,5 +1,7 @@
 package pokechu22.test.begradle;
 
+import static net.minecraftforge.gradle.common.Constants.REPLACE_MCP_CHANNEL;
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -7,15 +9,22 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import net.minecraftforge.gradle.tasks.GenSrgs;
+import net.minecraftforge.gradle.user.UserBaseExtension;
 import net.minecraftforge.gradle.user.UserBasePlugin;
+import net.minecraftforge.gradle.util.delayed.DelayedFile;
 import net.minecraftforge.srg2source.rangeapplier.MethodData;
 import net.minecraftforge.srg2source.rangeapplier.SrgContainer;
 
+import org.gradle.api.Action;
+import org.gradle.api.InvalidUserDataException;
+import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.file.FileCollection;
 
 /**
@@ -24,6 +33,9 @@ import org.gradle.api.file.FileCollection;
 public class GenSrgsWithCustomSupportTask extends GenSrgs {
 	protected boolean hasCopied = false;
 	protected boolean hasCustomSrgs = false;
+
+	/** Should match parent list (which is private...) */
+	private LinkedList<File> extraSrgs = new LinkedList<File>();
 
 	/**
 	 * Copy settings from the previous version of this task.
@@ -202,34 +214,71 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
     }
 	// End quote
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public void addExtraSrg(File file) {
+		// If hasCustomSrgs is set to true, we've already done this; don't do it again
+		// (XXX but do we want to change the custom name to include all of them?)
 		if (!hasCustomSrgs) {
-			// Added new custom SRGs; tell the project that it must use the local cache
-			// This doesn't happen automatically unfortunately.
-			// This needs to be done here instead of the task action because it must happen
-			// even if the overall task is skipped.
-			// No setter for this, so we use reflection
-			Field field;
-			try {
-				field = UserBasePlugin.class.getDeclaredField("useLocalCache");
-				field.setAccessible(true);
-			} catch (NoSuchFieldException | SecurityException ex) {
-				throw new RuntimeException("Failed to get useLocalCache field", ex);
-			}
+			for (final UserBasePlugin<? extends UserBaseExtension> plugin :
+					getProject().getPlugins().withType(UserBasePlugin.class)) {
+				// XXX This is probably a bad idea, but it _shouldn't_ break anything.
+				// Force the SRGs (and the deobf'd jars) to be put in a separate location,
+				// so that things don't break.  Hopefully.
 
-			for (UserBasePlugin<?> plugin : getProject().getPlugins()
-					.withType(UserBasePlugin.class)) {
-				getLogger().debug("Enabling useLocalCache for " + plugin);
-				try {
-					field.setBoolean(plugin, true);
-				} catch (IllegalArgumentException | IllegalAccessException ex) {
-					getLogger().warn("Failed to set useLocalCache for " + plugin, ex);
+				// We need to know the mappings to tweak them; otherwise they'll
+				// get overwritten.
+				if (plugin.getExtension().getMappingsChannel() == null) {
+					throw new InvalidUserDataException(
+							"Can't configure genSrgs replacement against " + plugin
+									+ " until mappings have been set!");
 				}
+
+				this.doFirst(new Action<Task>() {
+					@Override
+					public void execute(Task t) {
+						// Ugly, but needed to put things in the right locationafterEvaluate
+
+						String channelOrig = plugin.replacer.get(REPLACE_MCP_CHANNEL);
+						StringBuilder newChanBuilder = new StringBuilder();
+						newChanBuilder.append("custom_" + channelOrig);
+						for (File file : extraSrgs) {
+							newChanBuilder.append("_").append(file.getName());
+						}
+						String newChannel = newChanBuilder.toString();
+
+						getLogger().info("Changing storage location for " + plugin
+								+ ": was " + channelOrig + ", is " + newChannel);
+						plugin.replacer.putReplacement(REPLACE_MCP_CHANNEL, newChannel);
+					}
+				});
 			}
 		}
 
+		extraSrgs.add(file);
+
 		hasCustomSrgs = true;
 		super.addExtraSrg(file);
+	}
+
+	// Because the values here change on replacement, we need to resolve the
+	// files now.  Only do this for the CSVs because the others are output,
+	// not input.
+	@Override
+	public void setMethodsCsv(DelayedFile methodsCsv) {
+		super.setMethodsCsv(resolve(methodsCsv));
+	}
+
+	@Override
+	public void setFieldsCsv(DelayedFile fieldsCsv) {
+		super.setFieldsCsv(resolve(fieldsCsv));
+	}
+
+	/**
+	 * Converts a delayed file to its resolved version, maintaining ownership.
+	 */
+	private DelayedFile resolve(DelayedFile in) {
+		File file = in.call();
+		return new DelayedFile((Class<?>)in.getOwner(), file);
 	}
 }
