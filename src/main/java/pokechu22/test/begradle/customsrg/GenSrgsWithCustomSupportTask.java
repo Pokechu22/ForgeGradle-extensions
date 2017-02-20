@@ -177,10 +177,30 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 		}
 	}
 
-	// The important method.  Contents was in a comment block.
+	/**
+	 * The important method.  Contents was in a comment block.
+	 * <p>
+	 * In addition to the original behavior of creating a custom EXC, this method
+	 * now puts remapped classes back in the original SRG.
+	 * 
+	 * @param extras The extra SRGs to load
+	 * @param inSrg The original SRG.
+	 * @return Remapped EXC data
+	 */
 	protected Map<String, String> readExtraSrgs(FileCollection extras, SrgContainer inSrg) {
+		SrgContainer extraSrg = new SrgContainer().readSrgs(extras);
+		// Update the class mapping.
+		Map<String, String> inInverseClassMap = inSrg.classMap.inverse();
+		for (Map.Entry<String, String> classRemap : extraSrg.classMap.entrySet()) {
+			String from = classRemap.getKey();
+			String to = classRemap.getValue();
+			if (inInverseClassMap.containsKey(from)) {
+				String origFrom = inInverseClassMap.get(from);
+				inSrg.classMap.put(origFrom, to);
+			}
+		}
+
 		// Begin quote
-        SrgContainer extraSrg = new SrgContainer().readSrgs(extras);
         // Need to convert these to Notch-SRG names. and add them to the other one.
         // These Extra SRGs are in MCP->SRG names as they are denoting dev time values.
         // So we need to swap the values we get.

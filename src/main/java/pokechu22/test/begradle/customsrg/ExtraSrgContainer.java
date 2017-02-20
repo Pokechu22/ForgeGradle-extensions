@@ -14,7 +14,13 @@ import org.gradle.util.ConfigureUtil;
 /**
  * A collection of additional SRG files.
  */
-public class ExtraSrgContainer implements Iterable<File> {
+public final class ExtraSrgContainer implements Iterable<File> {
+	private final CustomSrgInjectPlugin plugin;
+
+	ExtraSrgContainer(CustomSrgInjectPlugin plugin) {
+		this.plugin = plugin; 
+	}
+
 	private List<File> srgs = new LinkedList<>();
 
 	/**
@@ -58,6 +64,8 @@ public class ExtraSrgContainer implements Iterable<File> {
 
 	public void add(File file) {
 		this.srgs.add(file);
+		// Ugly, but needed so that it's enabled _before_ the dependencies ask for it.
+		plugin.forceLocalCache();
 	}
 
 	/**

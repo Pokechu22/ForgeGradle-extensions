@@ -5,7 +5,9 @@ import static net.minecraftforge.gradle.user.UserConstants.*;
 import static pokechu22.test.begradle.customsrg.CustomSrgConstants.*;
 
 import java.lang.reflect.Field;
+import java.util.List;
 
+import net.minecraftforge.gradle.tasks.ApplyS2STask;
 import net.minecraftforge.gradle.tasks.CreateStartTask;
 import net.minecraftforge.gradle.tasks.DeobfuscateJar;
 import net.minecraftforge.gradle.tasks.GenSrgs;
@@ -35,7 +37,11 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 	/**
 	 * Contains the list of additional SRGs to add.
 	 */
-	protected ExtraSrgContainer extraSrgContainer = new ExtraSrgContainer();
+	protected ExtraSrgContainer extraSrgContainer = new ExtraSrgContainer(this);
+	/**
+	 * Has {@link #forceLocalCache()} been called?
+	 */
+	protected boolean hasForcedLocalCache = false;
 
 	@Override
 	public void apply(Project project) {
@@ -110,19 +116,22 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		task.setExtraSrgs(extraSrgContainer);
 		project.getLogger().debug("Injected - " + task);
 
-		// We need the local cache
-		forceLocalCache();
-
 		// Now, tweak all of the output locations.  This is the fragile part.
 		// This doesn't affect, for instance, the patcher plugin.  That _may_
 		// be a problem... but I don't want to deal with it right now.
 		updateBasePluginMakeCommonTasks();
 		updateUserBasePluginMakeDecompTasks();
+		updateUserBasePluginConfigureRetromapping();
 
 		// Finally, fix the reobf task.  This is _probably_ wrong, as there are
-		// _probably_ many more tasks I also need to fix...
+		// _probably_ many more tasks I also need to fix...  But I'd need to
+		// edit the factory, which seems more complex.
 		TaskSingleReobf reobf = getTask("reobfJar", TaskSingleReobf.class);
-		reobf.addSecondarySrgFile(CUSTOM_REVERSE_SRG);
+		reobf.setPrimarySrg(delayedFile(CUSTOM_SRG_MCP_TO_NOTCH));
+		// Note: no need to directly apply the reverse SRG; the custom SRG
+		// already handles it.
+		// ... however, this might not choose the right reobfuscation map;
+		// might want MCP to SRG (forge).
 	}
 
 	/**
@@ -171,12 +180,77 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 	}
 
 	/**
+	 * @see net.minecraftforge.gradle.user.UserBasePlugin#configureRetromapping
+	 */
+	private void updateUserBasePluginConfigureRetromapping() {
+		// This also may be broken, as it seems like there can be multiple of
+		// these tasks.  Also we need to remove the original SRGs and EXCs...
+		ApplyS2STask retromap = getTask(String.format(TMPL_TASK_RETROMAP, "Main"), ApplyS2STask.class);
+		clear(retromap);
+		retromap.addSrg(delayedFile(CUSTOM_SRG_MCP_TO_SRG));
+		retromap.addExc(delayedFile(CUSTOM_EXC_MCP));
+		retromap.addExc(delayedFile(CUSTOM_EXC_SRG));
+
+		retromap = getTask(String.format(TMPL_TASK_RETROMAP_RPL, "Main"), ApplyS2STask.class);
+		clear(retromap);
+		retromap.addSrg(delayedFile(CUSTOM_SRG_MCP_TO_SRG));
+		retromap.addExc(delayedFile(CUSTOM_EXC_MCP));
+		retromap.addExc(delayedFile(CUSTOM_EXC_SRG));
+	}
+	
+	/**
+	 * Clears the EXC and SRG files of the given task, so that new ones can be added.
+	 * @param task The task to edit.
+	 */
+	private void clear(ApplyS2STask task) {
+		Field srg;
+		Field exc;
+		try {
+			srg = ApplyS2STask.class.getDeclaredField("srg");
+			srg.setAccessible(true);
+		} catch (NoSuchFieldException | SecurityException ex) {
+			throw new RuntimeException("Failed to get srg field", ex);
+		}
+		try {
+			exc = ApplyS2STask.class.getDeclaredField("exc");
+			exc.setAccessible(true);
+		} catch (NoSuchFieldException | SecurityException ex) {
+			throw new RuntimeException("Failed to get exc field", ex);
+		}
+
+		project.getLogger().debug("Clearing SRG list for " + task);
+		try {
+			List<?> srgList = (List<?>) srg.get(task);
+			project.getLogger().debug("Old list was " + srgList);
+			srgList.clear();
+		} catch (IllegalArgumentException | IllegalAccessException ex) {
+			project.getLogger().warn("Failed to clear SRGs for " + task, ex);
+		}
+		project.getLogger().debug("Clearing EXC list for " + task);
+		try {
+			List<?> excList = (List<?>) exc.get(task);
+			project.getLogger().debug("Old list was " + excList);
+			excList.clear();
+		} catch (IllegalArgumentException | IllegalAccessException ex) {
+			project.getLogger().warn("Failed to clear EXCs for " + task, ex);
+		}
+	}
+
+	/**
 	 * Force each project to use the local cache, so that normal jars aren't clobbered.
 	 * This doesn't happen automatically with custom SRGs (it does with access transformers);
 	 *
 	 * Unfortunately there is no setter for this, so we need to use reflection.
+	 *
+	 * We can't override the normal method for this because that requires implementing a
+	 * FG plugin, and we don't want to force a specific one of those.
 	 */
 	protected final void forceLocalCache() {
+		if (hasForcedLocalCache) {
+			return;
+		}
+		hasForcedLocalCache = true;
+
 		Field field;
 		try {
 			field = UserBasePlugin.class.getDeclaredField("useLocalCache");
