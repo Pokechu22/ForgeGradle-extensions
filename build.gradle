@@ -64,6 +64,8 @@ dependencies {
 
 	testCompile 'junit:junit:4.12'
 
+	compile 'net.minecraftforge.srg2source:Srg2Source:4.0-SNAPSHOT'
+
 	// Put FG below so that dependencies are prioritized (source attachment)
 	compile 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
 }
