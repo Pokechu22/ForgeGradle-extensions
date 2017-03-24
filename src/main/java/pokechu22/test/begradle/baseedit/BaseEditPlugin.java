@@ -198,7 +198,8 @@ public class BaseEditPlugin extends
 
 	@Override
 	protected Object getStartDir() {
-		return delayedFile(REPLACE_CACHE_DIR + "/net/minecraft/" + getJarName()
+		// Use the project cache to not overwrite other configs
+		return delayedFile(REPLACE_PROJECT_CACHE_DIR + "/net/minecraft/" + getJarName()
 				+ "/" + REPLACE_MC_VERSION + "/start");
 	}
 
