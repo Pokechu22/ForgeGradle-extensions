@@ -15,7 +15,7 @@ buildscript {
 	}
 	dependencies {
 		// ForgeGradle itself
-		classpath 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
+		classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
 	}
 }
 
@@ -29,10 +29,10 @@ apply plugin: 'eclipse'
 apply plugin: 'maven'
 
 group = 'pokechu22.test.begradle'
-version = '0.0.4'
+version = '0.1.0'
 archivesBaseName = 'begradle'
-targetCompatibility = '1.7'
-sourceCompatibility = '1.7'
+targetCompatibility = '1.8'
+sourceCompatibility = '1.8'
 
 repositories {
 	// Local repository (eg, own build of ForgeGradle)
@@ -67,7 +67,7 @@ dependencies {
 	compile 'net.minecraftforge.srg2source:Srg2Source:4.0-SNAPSHOT'
 
 	// Put FG below so that dependencies are prioritized (source attachment)
-	compile 'net.minecraftforge.gradle:ForgeGradle:2.2-SNAPSHOT'
+	compile 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
 }
 
 task wrapper(type: Wrapper) {
