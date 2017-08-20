@@ -23,12 +23,14 @@ import org.gradle.api.tasks.TaskValidationException;
  * generating them. It also validates the base folders.
  */
 public class ProcessBasePatchesTask extends AbstractPatchingTask {
+	@Override
 	@InputDirectory
 	@OutputDirectory
 	@Optional
 	public File getPatches() {
 		return super.getPatches();
 	}
+	@Override
 	@InputDirectory
 	@OutputDirectory
 	@Optional
@@ -106,7 +108,7 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 				}
 			}
 			// OK, now we generate patches for the known classes.
-			List<String> used = new ArrayList<String>(baseClasses);
+			List<String> used = new ArrayList<>(baseClasses);
 			used.removeAll(unused);
 			for (String className : used) {
 				genPatch(className, jar);

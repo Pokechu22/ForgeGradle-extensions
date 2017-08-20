@@ -15,10 +15,12 @@ import org.gradle.api.tasks.TaskAction;
  */
 public class GenerateBasePatchesTask extends AbstractPatchingTask {
 	// Add annotations to the right methods
+	@Override
 	@OutputDirectory
 	public File getPatches() {
 		return super.getPatches();
 	}
+	@Override
 	@InputDirectory
 	public File getPatchedSource() {
 		return super.getPatchedSource();
