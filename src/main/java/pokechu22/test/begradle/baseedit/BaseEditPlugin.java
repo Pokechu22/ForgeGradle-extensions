@@ -19,6 +19,7 @@ import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 import net.minecraftforge.gradle.util.json.version.Version;
 
 import org.gradle.api.Action;
+import org.gradle.api.file.CopySpec;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.JavaExec;
@@ -48,6 +49,18 @@ public class BaseEditPlugin extends
 		jar.setBaseName(baseName);
 		jar.setAppendix("baseedit");
 		jar.setExtension("zip");
+
+		// Disable generation of META-INF.
+		// Note that we can't use jar.getMetaInf - that isn't actually a getter,
+		// but rather something that creates a subtask.  So steal the field directly.
+		try {
+			Field metaInfField = Jar.class.getDeclaredField("metaInf");
+			metaInfField.setAccessible(true);
+			CopySpec metaInf = (CopySpec) metaInfField.get(jar);
+			metaInf.exclude("**");  // This is the call that actually disables generation
+		} catch (Exception ex) {
+			throw new RuntimeException("Failed to disable META-INF generation", ex);
+		}
 
 		final Jar sourceJar = (Jar) tasks.getByName("sourceJar");
 		sourceJar.setBaseName(baseName);
