@@ -4,13 +4,16 @@ import static net.minecraftforge.gradle.common.Constants.*;
 import static net.minecraftforge.gradle.user.UserConstants.*;
 import static pokechu22.test.begradle.customsrg.CustomSrgConstants.*;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
 
 import net.minecraftforge.gradle.tasks.ApplyS2STask;
 import net.minecraftforge.gradle.tasks.CreateStartTask;
 import net.minecraftforge.gradle.tasks.DeobfuscateJar;
 import net.minecraftforge.gradle.tasks.GenSrgs;
+import net.minecraftforge.gradle.tasks.PostDecompileTask;
 import net.minecraftforge.gradle.tasks.RemapSources;
 import net.minecraftforge.gradle.user.TaskSingleDeobfBin;
 import net.minecraftforge.gradle.user.TaskSingleReobf;
@@ -24,6 +27,8 @@ import org.gradle.api.Task;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
+
+import com.google.common.collect.Multimap;
 
 /**
  * A plugin that handles custom SRG tasks.
@@ -153,6 +158,8 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		// already handles it.
 		// ... however, this might not choose the right reobfuscation map;
 		// might want MCP to SRG (forge).
+
+		injectCustomPatches();
 	}
 
 	/**
@@ -292,6 +299,21 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			excList.clear();
 		} catch (IllegalArgumentException | IllegalAccessException ex) {
 			project.getLogger().warn("Failed to clear EXCs for " + task, ex);
+		}
+	}
+
+	private void injectCustomPatches() {
+		try {
+			final PostDecompileTask postDecomp = getTask(TASK_POST_DECOMP, PostDecompileTask.class);
+			Field field = PostDecompileTask.class.getDeclaredField("patchesMap");
+			field.setAccessible(true);
+			@SuppressWarnings("unchecked")
+			Multimap<String, File> patchesMap = (Multimap<String, File>) field.get(postDecomp);
+			for (Map.Entry<String, File> patch : extraSrgContainer.getPatches().entrySet()) {
+				patchesMap.put(patch.getKey(), patch.getValue());
+			}
+		} catch (NoSuchFieldException | IllegalArgumentException | IllegalAccessException ex) {
+			throw new RuntimeException("Failed to inject custom patches map!", ex);
 		}
 	}
 
