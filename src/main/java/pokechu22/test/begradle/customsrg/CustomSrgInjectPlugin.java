@@ -113,7 +113,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		task.copyFrom(origGenSrgs);
 		task.setSrgLog(delayedFile(CUSTOM_SRG_LOG));
 		task.setReverseSrg(delayedFile(CUSTOM_REVERSE_SRG));
-		task.setExtraSrgs(extraSrgContainer);
+		task.setExtraSrgs(extraSrgContainer.getSrgs());
 		project.getLogger().debug("Injected - " + task);
 
 		// Now, tweak all of the output locations.  This is the fragile part.
