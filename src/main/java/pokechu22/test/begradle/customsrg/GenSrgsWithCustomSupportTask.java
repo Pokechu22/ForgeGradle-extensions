@@ -34,35 +34,53 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 	protected boolean hasCustomSrgs = false;
 
 	private Object srgLog;
-	/** A file that lists the SRGs that were used, for reference purposes. */
+	/**
+	 * A file that lists the SRGs that were used, for reference (and caching?) purposes.
+	 * @return The SRG log.
+	 */
 	@OutputFile
 	public File getSrgLog() {
 		return getProject().file(srgLog);
 	}
-	/** A file that lists the SRGs that were used, for reference purposes. */
+	/**
+	 * A file that lists the SRGs that were used, for reference purposes.
+	 * @param srgLog The file to log to
+	 */
 	public void setSrgLog(Object srgLog) {
 		this.srgLog = srgLog;
 	}
 
 	private Object reverseSrg;
-	/** A SRG that reverses the extra SRGs. */
+	/**
+	 * A SRG that reverses the extra SRGs.
+	 * @return The reverse SRG
+	 */
 	@OutputFile
 	public File getReverseSrg() {
 		return getProject().file(reverseSrg);
 	}
-	/** A SRG that reverses the extra SRGs. */
+	/**
+	 * A SRG that reverses the extra SRGs.
+	 * @param reverseSrg The file to write the reverse SRG to.
+	 */
 	public void setReverseSrg(Object reverseSrg) {
 		this.reverseSrg = reverseSrg;
 	}
 
 	private Object extraSrgs;
-	/** Gets the auxiliary SRGs provided to this task. */
+	/**
+	 * Gets the auxiliary SRGs provided to this task.
+	 * @return The extra SRGs.
+	 */
 	@Override
 	@OutputFiles
 	public FileCollection getExtraSrgs() {
 		return getProject().files(extraSrgs);
 	}
-	/** Sets the auxiliary SRGs provided to this task. */
+	/**
+	 * Sets the auxiliary SRGs provided to this task.
+	 * @param extraSrgs The extra SRG files.
+	 */
 	public void setExtraSrgs(Object extraSrgs) {
 		this.extraSrgs = extraSrgs;
 	}
@@ -278,6 +296,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 
 	/**
 	 * The second task action, which handles the SRG log and the reverse SRG.
+	 * @throws IOException if an IO error occurs.
 	 */
 	@TaskAction
 	public void handleTask() throws IOException {
