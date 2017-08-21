@@ -11,6 +11,8 @@ import net.minecraftforge.gradle.tasks.ApplyS2STask;
 import net.minecraftforge.gradle.tasks.CreateStartTask;
 import net.minecraftforge.gradle.tasks.DeobfuscateJar;
 import net.minecraftforge.gradle.tasks.GenSrgs;
+import net.minecraftforge.gradle.tasks.RemapSources;
+import net.minecraftforge.gradle.user.TaskSingleDeobfBin;
 import net.minecraftforge.gradle.user.TaskSingleReobf;
 import net.minecraftforge.gradle.user.UserBasePlugin;
 import net.minecraftforge.gradle.util.delayed.DelayedFile;
@@ -18,6 +20,7 @@ import net.minecraftforge.gradle.util.delayed.DelayedFile;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
@@ -100,6 +103,19 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			return;
 		}
 
+		project.getLogger().debug("Adding CSV generation task");
+		GenCsvsTask genCsvs = project.getTasks().create(TASK_GENERATE_CSVS, GenCsvsTask.class);
+		{
+			genCsvs.setInMethodsCSV(delayedFile(CSV_METHOD));
+			genCsvs.setOutMethodsCSV(delayedFile(CUSTOM_CSV_METHOD));
+			genCsvs.setInFieldsCSV(delayedFile(CSV_FIELD));
+			genCsvs.setOutFieldsCSV(delayedFile(CUSTOM_CSV_FIELD));
+			genCsvs.setExtraSrgContainer(extraSrgContainer);
+
+			genCsvs.setDescription("Generates custom MCP method and field CSVs.");
+			genCsvs.dependsOn(TASK_EXTRACT_MCP, TASK_EXTRACT_MAPPINGS);
+		}
+
 		// Provide this one new replacement token.
 		otherPlugin.replacer.putReplacement(REPLACE_CUSTOM_SRG_SPECIFIER,
 				extraSrgContainer.getSpecifier());
@@ -114,14 +130,19 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		task.setSrgLog(delayedFile(CUSTOM_SRG_LOG));
 		task.setReverseSrg(delayedFile(CUSTOM_REVERSE_SRG));
 		task.setExtraSrgs(extraSrgContainer.getSrgs());
+		task.setMethodsCsv(delayedFile(CUSTOM_CSV_METHOD));
+		task.setFieldsCsv(delayedFile(CUSTOM_CSV_FIELD));
+		task.dependsOn(TASK_GENERATE_CSVS);
 		project.getLogger().debug("Injected - " + task);
 
 		// Now, tweak all of the output locations.  This is the fragile part.
 		// This doesn't affect, for instance, the patcher plugin.  That _may_
 		// be a problem... but I don't want to deal with it right now.
 		updateBasePluginMakeCommonTasks();
+		updateUserBasePluginRemapDeps();
 		updateUserBasePluginMakeDecompTasks();
 		updateUserBasePluginConfigureRetromapping();
+		updateUserBasePluginSetupReobf();
 
 		// Finally, fix the reobf task.  This is _probably_ wrong, as there are
 		// _probably_ many more tasks I also need to fix...  But I'd need to
@@ -142,8 +163,8 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		// genSrgs.setInSrg(delayedFile(MCP_DATA_SRG));
 		// genSrgs.setInExc(delayedFile(MCP_DATA_EXC));
 		// genSrgs.setInStatics(delayedFile(MCP_DATA_STATICS));
-		// genSrgs.setMethodsCsv(delayedFile(CSV_METHOD));
-		// genSrgs.setFieldsCsv(delayedFile(CSV_FIELD));
+		genSrgs.setMethodsCsv(delayedFile(CUSTOM_CSV_METHOD));
+		genSrgs.setFieldsCsv(delayedFile(CUSTOM_CSV_FIELD));
 		genSrgs.setNotchToSrg(delayedFile(CUSTOM_SRG_NOTCH_TO_SRG));
 		genSrgs.setNotchToMcp(delayedFile(CUSTOM_SRG_NOTCH_TO_MCP));
 		genSrgs.setSrgToMcp(delayedFile(CUSTOM_SRG_SRG_TO_MCP));
@@ -151,6 +172,8 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		genSrgs.setMcpToNotch(delayedFile(CUSTOM_SRG_MCP_TO_NOTCH));
 		genSrgs.setSrgExc(delayedFile(CUSTOM_EXC_SRG));
 		genSrgs.setMcpExc(delayedFile(CUSTOM_EXC_MCP));
+
+		genSrgs.dependsOn(TASK_GENERATE_CSVS);
 	}
 
 	/**
@@ -161,8 +184,9 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		deobfBin.setSrg(delayedFile(CUSTOM_SRG_NOTCH_TO_MCP));
 		// deobfBin.setExceptorJson(delayedFile(MCP_DATA_EXC_JSON));
 		deobfBin.setExceptorCfg(delayedFile(CUSTOM_EXC_MCP));
-		// deobfBin.setFieldCsv(delayedFile(CSV_FIELD));
-		// deobfBin.setMethodCsv(delayedFile(CSV_METHOD));
+		deobfBin.setFieldCsv(delayedFile(CUSTOM_CSV_FIELD));
+		deobfBin.setMethodCsv(delayedFile(CUSTOM_CSV_METHOD));
+		deobfBin.dependsOn(TASK_GENERATE_CSVS);
 
 		final DeobfuscateJar deobfDecomp = getTask(TASK_DEOBF, DeobfuscateJar.class);
 		deobfDecomp.setSrg(delayedFile(CUSTOM_SRG_NOTCH_TO_SRG));
@@ -177,6 +201,41 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		makeStart.addReplacement("@@SRG_MCP_SRG@@", delayedFile(CUSTOM_SRG_MCP_TO_SRG));
 		makeStart.addReplacement("@@SRG_MCP_NOTCH@@", delayedFile(CUSTOM_SRG_MCP_TO_NOTCH));
 		// makeStart.addReplacement("@@CSVDIR@@", delayedFile(DIR_MCP_MAPPINGS));
+	}
+
+	/**
+	 * @see net.minecraftforge.gradle.user.UserBasePlugin#remapDeps
+	 */
+	private void updateUserBasePluginRemapDeps() {
+		for (Task task : project.getTasks()) {
+			if (task instanceof TaskSingleDeobfBin) {
+				TaskSingleDeobfBin deobf = (TaskSingleDeobfBin) task;
+				deobf.setFieldCsv(delayedFile(CUSTOM_CSV_FIELD));
+				deobf.setMethodCsv(delayedFile(CUSTOM_CSV_METHOD));
+				deobf.dependsOn(TASK_GENERATE_CSVS);
+			}
+			if (task instanceof RemapSources) {
+				RemapSources remap = (RemapSources) task;
+
+				remap.setFieldsCsv(delayedFile(CUSTOM_CSV_FIELD));
+				remap.setMethodsCsv(delayedFile(CUSTOM_CSV_METHOD));
+				remap.dependsOn(TASK_GENERATE_CSVS);
+			}
+		}
+	}
+
+	/**
+	 * @see net.minecraftforge.gradle.user.UserBasePlugin#setupReobf
+	 */
+	private void updateUserBasePluginSetupReobf() {
+		for (Task task : project.getTasks()) {
+			if (task instanceof TaskSingleReobf) {
+				TaskSingleReobf reobf = (TaskSingleReobf) task;
+				reobf.setFieldCsv(delayedFile(CUSTOM_CSV_FIELD));
+				reobf.setMethodCsv(delayedFile(CUSTOM_CSV_METHOD));
+				reobf.dependsOn(TASK_GENERATE_CSVS);
+			}
+		}
 	}
 
 	/**
