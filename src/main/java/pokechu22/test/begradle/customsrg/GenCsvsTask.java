@@ -22,24 +22,18 @@ import com.google.common.collect.Maps;
 import com.google.common.io.Files;
 
 public class GenCsvsTask extends DefaultTask {
-	@InputFile
 	private DelayedFile inMethodsCSV;
-	@OutputFile
 	private DelayedFile outMethodsCSV;
-	@InputFile
 	private DelayedFile inFieldsCSV;
-	@OutputFile
 	private DelayedFile outFieldsCSV;
 
-	@InputFiles
-	private List<File> extraMethods;
-	@InputFiles
-	private List<File> extraFields;
+	private ExtraSrgContainer extraSrgContainer;
 
 	/**
 	 * Gets the original method CSV.
 	 * @return The original method CSV
 	 */
+	@InputFile
 	public File getInMethodsCSV() {
 		return inMethodsCSV.call();
 	}
@@ -55,6 +49,7 @@ public class GenCsvsTask extends DefaultTask {
 	 * Gets the new method CSV.
 	 * @return The new method CSV
 	 */
+	@OutputFile
 	public File getOutMethodsCSV() {
 		return outMethodsCSV.call();
 	}
@@ -70,6 +65,7 @@ public class GenCsvsTask extends DefaultTask {
 	 * Gets the original field CSV.
 	 * @return The original field CSV
 	 */
+	@InputFile
 	public File getInFieldsCSV() {
 		return inFieldsCSV.call();
 	}
@@ -85,6 +81,7 @@ public class GenCsvsTask extends DefaultTask {
 	 * Gets the new field CSV.
 	 * @return The new field CSV
 	 */
+	@OutputFile
 	public File getOutFieldsCSV() {
 		return outFieldsCSV.call();
 	}
@@ -97,13 +94,28 @@ public class GenCsvsTask extends DefaultTask {
 	}
 
 	/**
+	 * Gets the extra method CSVs.
+	 * @return The extra method CSVs.
+	 */
+	@InputFiles
+	public List<File> getExtraMethods() {
+		return extraSrgContainer.getMethods();
+	}
+	/**
+	 * Gets the extra field CSVs.
+	 * @return The extra field CSVs.
+	 */
+	@InputFiles
+	public List<File> getExtraFields() {
+		return extraSrgContainer.getFields();
+	}
+	/**
 	 * Collects data from the given extra SRG container.
 	 *
 	 * @param container The container.
 	 */
 	public void setExtraSrgContainer(ExtraSrgContainer container) {
-		this.extraMethods = container.getMethods();
-		this.extraFields = container.getFields();
+		this.extraSrgContainer = container;
 	}
 
 	@TaskAction
@@ -111,7 +123,7 @@ public class GenCsvsTask extends DefaultTask {
 		// Read the methods CSV, replacing things as needed:
 		LinkedHashMap<String, String[]> methods = Maps.newLinkedHashMap();
 		process(getInMethodsCSV(), methods);
-		for (File file : extraMethods) {
+		for (File file : getExtraMethods()) {
 			process(file, methods);
 		}
 
@@ -122,7 +134,7 @@ public class GenCsvsTask extends DefaultTask {
 
 		LinkedHashMap<String, String[]> fields = Maps.newLinkedHashMap();
 		process(getInFieldsCSV(), fields);
-		for (File file : extraFields) {
+		for (File file : getExtraFields()) {
 			process(file, fields);
 		}
 
