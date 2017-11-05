@@ -203,34 +203,27 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 	 * @param inSrg
 	 *            The original SRG.
 	 * @param extraSrg
-	 *            The extra SRG.
+	 *            The extra SRG. Only its {@link SrgContainer#classMap classMap} is
+	 *            used.
 	 * @return The remapped SRG
 	 */
 	protected static SrgContainer remapSrg(SrgContainer inSrg, SrgContainer extraSrg) {
 		SrgContainer outSrg = new SrgContainer();
 
-		// Update the class mapping.
-		outSrg.classMap.putAll(inSrg.classMap);
-		Map<String, String> inInverseClassMap = inSrg.classMap.inverse();
-		for (Map.Entry<String, String> classRemap : extraSrg.classMap.entrySet()) {
-			String from = classRemap.getKey();
-			String to = classRemap.getValue();
-			if (inInverseClassMap.containsKey(from)) {
-				String origFrom = inInverseClassMap.get(from);
-				outSrg.classMap.put(origFrom, to);
-			}
+		// Remap classes
+		for (Entry<String, String> e : inSrg.classMap.entrySet()) {
+			String newClass = remap(e.getValue(), extraSrg.classMap);
+			outSrg.classMap.put(e.getKey(), newClass);
 		}
 
-		// Rename methods
-		outSrg.methodMap.putAll(inSrg.methodMap);
+		// Remap methods
 		for (Entry<MethodData, MethodData> e : inSrg.methodMap.entrySet()) {
 			String newSig = remapSig(e.getValue().sig, extraSrg.classMap);
-			String newName = remapMethodName(e.getValue().name, newSig, extraSrg.classMap, extraSrg.methodMap);
+			String newName = remapQualifiedName(e.getValue().name, extraSrg.classMap);
 			outSrg.methodMap.put(e.getKey(), new MethodData(newName, newSig));
 		}
 
-		// Rename fields
-		outSrg.fieldMap.putAll(inSrg.fieldMap);
+		// Remap fields
 		for (Entry<String, String> e : inSrg.fieldMap.entrySet()) {
 			String newName = remapQualifiedName(e.getValue(), extraSrg.classMap);
 			outSrg.fieldMap.put(e.getKey(), newName);
@@ -242,20 +235,8 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 		return outSrg;
 	}
 
-	// These methods were removed in f35ae3952a735efc907da9afb584a9029e852b79 - quoted w/ modifications
-	protected static String remapMethodName(String qualified, String notchSig, Map<String, String> classMap, Map<MethodData, MethodData> methodMap)
-    {
-
-        for (MethodData data : methodMap.keySet())
-        {
-            if (data.name.equals(qualified))
-                return methodMap.get(data).name;
-        }
-
-        return remapQualifiedName(qualified, classMap);
-    }
-
-    protected static String remapSig(String sig, Map<String, String> classMap)
+	// Based on the methods that were removed in f35ae3952a735efc907da9afb584a9029e852b79:
+	protected static String remapSig(String sig, Map<String, String> classMap)
     {
         StringBuilder newSig = new StringBuilder(sig.length());
 
