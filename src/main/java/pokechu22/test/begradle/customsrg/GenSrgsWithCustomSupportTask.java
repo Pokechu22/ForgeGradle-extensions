@@ -142,12 +142,13 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
         readCSVs(getMethodsCsv(), getFieldsCsv(), methods, fields);
 
         // Do SRG stuff
+        SrgContainer extraSrg = new SrgContainer().readSrgs(getExtraSrgs());
         SrgContainer inSrg = new SrgContainer().readSrg(getInSrg());
-        Map<String, String> excRemap = readExtraSrgs(getExtraSrgs(), inSrg);
+        remapSrg(extraSrg, inSrg);
         writeOutSrgs(inSrg, methods, fields);
 
         // do EXC stuff
-        writeOutExcs(inSrg, excRemap, methods);
+        writeOutExcs(inSrg, Collections.emptyMap(), methods);
 
 		// End quote
 	}
@@ -196,17 +197,15 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 	}
 
 	/**
-	 * The important method.  Contents was in a comment block.
-	 * <p>
-	 * In addition to the original behavior of creating a custom EXC, this method
-	 * now puts remapped classes back in the original SRG.
+	 * Remaps one srg with the extra SRG. Based off of
+	 * {@link GenSrgs#readExtraSrgs}, specifically the commented out portion.
 	 * 
-	 * @param extras The extra SRGs to load
-	 * @param inSrg The original SRG.
-	 * @return Remapped EXC data
+	 * @param extras
+	 *            The extra SRG.
+	 * @param inSrg
+	 *            The original SRG, modified in-place.
 	 */
-	protected Map<String, String> readExtraSrgs(FileCollection extras, SrgContainer inSrg) {
-		SrgContainer extraSrg = new SrgContainer().readSrgs(extras);
+	protected static void remapSrg(SrgContainer extraSrg, SrgContainer inSrg) {
 		// Update the class mapping.
 		Map<String, String> inInverseClassMap = inSrg.classMap.inverse();
 		for (Map.Entry<String, String> classRemap : extraSrg.classMap.entrySet()) {
@@ -239,13 +238,11 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
             inSrg.methodMap.put(new MethodData(notchName, notchSig), e.getValue());
             excRemap.put(e.getKey().name, e.getValue().name);
         }
-
-        return excRemap;
 		// End quote
 	}
 
 	// These methods were removed in f35ae3952a735efc907da9afb584a9029e852b79 - begin quote
-	protected String remapMethodName(String qualified, String notchSig, Map<String, String> classMap, Map<MethodData, MethodData> methodMap)
+	protected static String remapMethodName(String qualified, String notchSig, Map<String, String> classMap, Map<MethodData, MethodData> methodMap)
     {
 
         for (MethodData data : methodMap.keySet())
@@ -256,8 +253,8 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 
         String cls = qualified.substring(0, qualified.lastIndexOf('/'));
         String name = qualified.substring(cls.length() + 1);
-        getProject().getLogger().lifecycle(qualified);
-        getProject().getLogger().lifecycle(cls + " " + name);
+        // getProject().getLogger().lifecycle(qualified);
+        // getProject().getLogger().lifecycle(cls + " " + name);
 
         String ret = classMap.get(cls);
         if (ret != null)
@@ -266,7 +263,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
         return cls + '/' + name;
     }
 
-    protected String remapSig(String sig, Map<String, String> classMap)
+    protected static String remapSig(String sig, Map<String, String> classMap)
     {
         StringBuilder newSig = new StringBuilder(sig.length());
 
