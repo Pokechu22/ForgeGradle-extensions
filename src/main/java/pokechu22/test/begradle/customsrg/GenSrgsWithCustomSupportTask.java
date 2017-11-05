@@ -144,7 +144,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
         // Do SRG stuff
         SrgContainer extraSrg = new SrgContainer().readSrgs(getExtraSrgs());
         SrgContainer inSrg = new SrgContainer().readSrg(getInSrg());
-        remapSrg(extraSrg, inSrg);
+        remapSrg(inSrg, extraSrg);
         writeOutSrgs(inSrg, methods, fields);
 
         // do EXC stuff
@@ -199,13 +199,13 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 	/**
 	 * Remaps one srg with the extra SRG. Based off of
 	 * {@link GenSrgs#readExtraSrgs}, specifically the commented out portion.
-	 * 
-	 * @param extras
-	 *            The extra SRG.
+	 *
 	 * @param inSrg
 	 *            The original SRG, modified in-place.
+	 * @param extraSrg
+	 *            The extra SRG.
 	 */
-	protected static void remapSrg(SrgContainer extraSrg, SrgContainer inSrg) {
+	protected static void remapSrg(SrgContainer inSrg, SrgContainer extraSrg) {
 		// Update the class mapping.
 		Map<String, String> inInverseClassMap = inSrg.classMap.inverse();
 		for (Map.Entry<String, String> classRemap : extraSrg.classMap.entrySet()) {
