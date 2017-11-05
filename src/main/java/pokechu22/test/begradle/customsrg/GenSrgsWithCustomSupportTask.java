@@ -144,11 +144,11 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
         // Do SRG stuff
         SrgContainer extraSrg = new SrgContainer().readSrgs(getExtraSrgs());
         SrgContainer inSrg = new SrgContainer().readSrg(getInSrg());
-        remapSrg(inSrg, extraSrg);
-        writeOutSrgs(inSrg, methods, fields);
+        SrgContainer newSrg = remapSrg(inSrg, extraSrg);
+        writeOutSrgs(newSrg, methods, fields);
 
         // do EXC stuff
-        writeOutExcs(inSrg, Collections.emptyMap(), methods);
+        writeOutExcs(newSrg, Collections.emptyMap(), methods);
 
 		// End quote
 	}
@@ -201,19 +201,23 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 	 * {@link GenSrgs#readExtraSrgs}, specifically the commented out portion.
 	 *
 	 * @param inSrg
-	 *            The original SRG, modified in-place.
+	 *            The original SRG.
 	 * @param extraSrg
 	 *            The extra SRG.
+	 * @return The remapped SRG
 	 */
-	protected static void remapSrg(SrgContainer inSrg, SrgContainer extraSrg) {
+	protected static SrgContainer remapSrg(SrgContainer inSrg, SrgContainer extraSrg) {
+		SrgContainer outSrg = new SrgContainer();
+
 		// Update the class mapping.
+		outSrg.classMap.putAll(inSrg.classMap);
 		Map<String, String> inInverseClassMap = inSrg.classMap.inverse();
 		for (Map.Entry<String, String> classRemap : extraSrg.classMap.entrySet()) {
 			String from = classRemap.getKey();
 			String to = classRemap.getValue();
 			if (inInverseClassMap.containsKey(from)) {
 				String origFrom = inInverseClassMap.get(from);
-				inSrg.classMap.put(origFrom, to);
+				outSrg.classMap.put(origFrom, to);
 			}
 		}
 
@@ -229,16 +233,22 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
         Map<MethodData, MethodData> methodMap = inSrg.methodMap.inverse();
 
         // rename methods
+        outSrg.methodMap.putAll(inSrg.methodMap);
         for (Entry<MethodData, MethodData> e : extraSrg.methodMap.inverse().entrySet())
         {
             String notchSig = remapSig(e.getValue().sig, classMap);
             String notchName = remapMethodName(e.getKey().name, notchSig, classMap, methodMap);
             //getProject().getLogger().lifecycle(e.getKey().name + " " + e.getKey().sig + " " + e.getValue().name + " " + e.getValue().sig);
             //getProject().getLogger().lifecycle(notchName       + " " + notchSig       + " " + e.getValue().name + " " + e.getValue().sig);
-            inSrg.methodMap.put(new MethodData(notchName, notchSig), e.getValue());
+            outSrg.methodMap.put(new MethodData(notchName, notchSig), e.getValue());
             excRemap.put(e.getKey().name, e.getValue().name);
         }
 		// End quote
+
+		outSrg.fieldMap.putAll(inSrg.fieldMap);
+		outSrg.packageMap.putAll(inSrg.packageMap);
+
+		return outSrg;
 	}
 
 	// These methods were removed in f35ae3952a735efc907da9afb584a9029e852b79 - begin quote

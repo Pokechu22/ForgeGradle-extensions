@@ -19,8 +19,8 @@ public class ExtraSRGTest {
 		SrgContainer extra = new SrgContainer();
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
-		GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(main.classMap, hasEntry("a", "foo/Example"));
+		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		assertThat(outSrg.classMap, hasEntry("a", "foo/Example"));
 	}
 
 	@Test
@@ -29,8 +29,8 @@ public class ExtraSRGTest {
 		extra.classMap.put("foo/Example", "foo/Thing");
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
-		GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(main.classMap, hasEntry("a", "foo/Thing"));
+		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		assertThat(outSrg.classMap, hasEntry("a", "foo/Thing"));
 	}
 
 	@Test
@@ -43,8 +43,8 @@ public class ExtraSRGTest {
 		main.classMap.put("a", "foo/Example");
 		main.methodMap.put(new MethodData("a/b", "()V"),
 				new MethodData("foo/Example/doThing()", "()V"));
-		GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(main.methodMap, hasEntry(new MethodData("a/b", "()V"),
+		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		assertThat(outSrg.methodMap, hasEntry(new MethodData("a/b", "()V"),
 				new MethodData("foo/Thing/doThing", "()V")));
 	}
 
@@ -59,8 +59,8 @@ public class ExtraSRGTest {
 		main.classMap.put("b", "foo/SomeObj");
 		main.methodMap.put(new MethodData("b/c", "()La;"),
 				new MethodData("foo/SomeObj/get", "()Lfoo/Example;"));
-		GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(main.methodMap, hasEntry(new MethodData("b/c", "()La;"),
+		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		assertThat(outSrg.methodMap, hasEntry(new MethodData("b/c", "()La;"),
 				new MethodData("foo/SomeObj/get", "()Lfoo/Thing;")));
 	}
 
@@ -75,8 +75,8 @@ public class ExtraSRGTest {
 		main.classMap.put("b", "foo/SomeObj");
 		main.methodMap.put(new MethodData("b/d", "(La;)V"),
 				new MethodData("foo/SomeObj/set", "(Lfoo/Example;)V"));
-		GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(main.methodMap, hasEntry(new MethodData("b/d", "(La;)V"),
+		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		assertThat(outSrg.methodMap, hasEntry(new MethodData("b/d", "(La;)V"),
 				new MethodData("foo/SomeObj/set", "(Lfoo/Thing;)V")));
 	}
 }
