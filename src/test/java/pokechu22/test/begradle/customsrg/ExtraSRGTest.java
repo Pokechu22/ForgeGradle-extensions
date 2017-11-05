@@ -37,8 +37,8 @@ public class ExtraSRGTest {
 		assertThat(outSrg.classMap, maps("a", "foo/Thing"));
 	}
 
-	@Test
 	/** Checks remapping of the containing class */
+	@Test
 	public void testMethodRemapClass() {
 		SrgContainer extra = new SrgContainer();
 		extra.classMap.put("foo/Example", "foo/Thing");
@@ -51,8 +51,8 @@ public class ExtraSRGTest {
 				new MethodData("foo/Thing/doThing", "()V")));
 	}
 
-	@Test
 	/** Checks remapping of the return type */
+	@Test
 	public void testMethodRemapReturnType() {
 		SrgContainer extra = new SrgContainer();
 		extra.classMap.put("foo/Example", "foo/Thing");
@@ -66,8 +66,8 @@ public class ExtraSRGTest {
 				new MethodData("foo/SomeObj/get", "()Lfoo/Thing;")));
 	}
 
-	@Test
 	/** Checks remapping of the return type */
+	@Test
 	public void testMethodRemapParamType() {
 		SrgContainer extra = new SrgContainer();
 		extra.classMap.put("foo/Example", "foo/Thing");
@@ -79,6 +79,21 @@ public class ExtraSRGTest {
 		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
 		assertThat(outSrg.methodMap, maps(new MethodData("b/d", "(La;)V"),
 				new MethodData("foo/SomeObj/set", "(Lfoo/Thing;)V")));
+	}
+
+	/**
+	 * Checks remapping of fields within a class.  Since SRGs do not store
+	 * the type of a field, this is the only needed test.
+	 */
+	@Test
+	public void testFieldRemap() {
+		SrgContainer extra = new SrgContainer();
+		extra.classMap.put("foo/Example", "foo/Thing");
+		SrgContainer main = new SrgContainer();
+		main.classMap.put("a", "foo/Example");
+		main.fieldMap.put("a/a", "foo/Example/data");
+		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		assertThat(outSrg.fieldMap, maps("a/a", "foo/Thing/data"));
 	}
 
 	/**
