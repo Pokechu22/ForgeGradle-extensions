@@ -35,16 +35,17 @@ targetCompatibility = '1.8'
 sourceCompatibility = '1.8'
 
 repositories {
+	// Main maven repos
+	jcenter()
+	mavenCentral()
 	// Local repository (eg, own build of ForgeGradle)
+	// Below those repos so that source jars work (but above FG)
 	mavenLocal()
 	// Needed for ForgeGradle (among other things) 
 	maven {
 		name = "forge"
 		url = "http://files.minecraftforge.net/maven"
 	}
-	// Main maven repos
-	jcenter()
-	mavenCentral()
 }
 
 configurations {
@@ -63,6 +64,7 @@ dependencies {
 	compile 'com.google.guava:guava:18.0'
 
 	testCompile 'junit:junit:4.12'
+	testCompile 'org.hamcrest:hamcrest-library:1.3'
 
 	compile 'net.minecraftforge.srg2source:Srg2Source:4.0-SNAPSHOT'
 
