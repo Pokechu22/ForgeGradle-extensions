@@ -2,7 +2,12 @@ package pokechu22.test.begradle.customsrg;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
+import static pokechu22.test.begradle.customsrg.ExtraSRGTest.IsMapWithSize.*;
 
+import java.util.Map;
+
+import org.hamcrest.FeatureMatcher;
+import org.hamcrest.Matcher;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -20,7 +25,7 @@ public class ExtraSRGTest {
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
 		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(outSrg.classMap, hasEntry("a", "foo/Example"));
+		assertThat(outSrg.classMap, maps("a", "foo/Example"));
 	}
 
 	@Test
@@ -30,7 +35,7 @@ public class ExtraSRGTest {
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
 		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(outSrg.classMap, hasEntry("a", "foo/Thing"));
+		assertThat(outSrg.classMap, maps("a", "foo/Thing"));
 	}
 
 	@Test
@@ -44,7 +49,7 @@ public class ExtraSRGTest {
 		main.methodMap.put(new MethodData("a/b", "()V"),
 				new MethodData("foo/Example/doThing()", "()V"));
 		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(outSrg.methodMap, hasEntry(new MethodData("a/b", "()V"),
+		assertThat(outSrg.methodMap, maps(new MethodData("a/b", "()V"),
 				new MethodData("foo/Thing/doThing", "()V")));
 	}
 
@@ -60,7 +65,7 @@ public class ExtraSRGTest {
 		main.methodMap.put(new MethodData("b/c", "()La;"),
 				new MethodData("foo/SomeObj/get", "()Lfoo/Example;"));
 		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(outSrg.methodMap, hasEntry(new MethodData("b/c", "()La;"),
+		assertThat(outSrg.methodMap, maps(new MethodData("b/c", "()La;"),
 				new MethodData("foo/SomeObj/get", "()Lfoo/Thing;")));
 	}
 
@@ -76,7 +81,30 @@ public class ExtraSRGTest {
 		main.methodMap.put(new MethodData("b/d", "(La;)V"),
 				new MethodData("foo/SomeObj/set", "(Lfoo/Example;)V"));
 		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
-		assertThat(outSrg.methodMap, hasEntry(new MethodData("b/d", "(La;)V"),
+		assertThat(outSrg.methodMap, maps(new MethodData("b/d", "(La;)V"),
 				new MethodData("foo/SomeObj/set", "(Lfoo/Thing;)V")));
+	}
+
+	/**
+	 * Matcher that checks that a map contains only the given entry.
+	 */
+	private static <A, B> Matcher<Map<? extends A, ? extends B>> maps(A key, B value) {
+		return both(hasEntry(key, value)).and(isMapWithSize(1));
+	}
+
+	/** https://stackoverflow.com/a/36087146/3991344 */
+	public static class IsMapWithSize<K, V>
+			extends FeatureMatcher<Map<? extends K, ? extends V>, Integer> {
+		public IsMapWithSize(Matcher<? super Integer> sizeMatcher) {
+			super(sizeMatcher, "a map with size", "map size");
+		}
+		@Override
+		protected Integer featureValueOf(Map<? extends K, ? extends V> actual) {
+			return actual.size();
+		}
+		public static <K, V> Matcher<Map<? extends K, ? extends V>> isMapWithSize(int size) {
+			Matcher<? super Integer> matcher = equalTo(size);
+			return new IsMapWithSize<K, V>(matcher);
+		}
 	}
 }
