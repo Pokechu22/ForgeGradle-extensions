@@ -212,13 +212,13 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 
 		// Remap classes
 		for (Entry<String, String> e : inSrg.classMap.entrySet()) {
-			String newClass = remap(e.getValue(), extraSrg.classMap);
+			String newClass = remapClass(e.getValue(), extraSrg.classMap);
 			outSrg.classMap.put(e.getKey(), newClass);
 		}
 
 		// Remap methods
 		for (Entry<MethodData, MethodData> e : inSrg.methodMap.entrySet()) {
-			String newSig = remapSig(e.getValue().sig, extraSrg.classMap);
+			String newSig = remapMethodDescriptor(e.getValue().sig, extraSrg.classMap);
 			String newName = remapQualifiedName(e.getValue().name, extraSrg.classMap);
 			outSrg.methodMap.put(e.getKey(), new MethodData(newName, newSig));
 		}
@@ -235,40 +235,77 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 		return outSrg;
 	}
 
-	// Based on the methods that were removed in f35ae3952a735efc907da9afb584a9029e852b79:
-	protected static String remapSig(String sig, Map<String, String> classMap)
-    {
-        StringBuilder newSig = new StringBuilder(sig.length());
+	/**
+	 * Remaps object types in a JVM <a href=
+	 * "https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">
+	 * method descriptor</a>. As per the documentation on <a href=
+	 * "https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.2">field
+	 * descriptors</a>, this means we need to remap things in the form of:
+	 * <code>L<u>fully/qualified/class/Name</u>;</code>, changing the underlined
+	 * portion.
+	 *
+	 * <p>
+	 * Based on the method originally removed in f35ae3952a735efc907da9afb584a9029e852b79.
+	 *
+	 * @param sig
+	 *            The signature, e.g. <code>(ILcom/example/Obj;I)V</code>
+	 * @param classMap
+	 *            The class map to use to rename, e.g. <code>{com/example/Obj &rarr;
+	 *            com/example/Thing}</code>
+	 * @return The new signature, e.g. <code>(ILcom/example/Thing;I)V</code>
+	 */
+	protected static String remapMethodDescriptor(String sig, Map<String, String> classMap) {
+		StringBuilder newSig = new StringBuilder(sig.length());
 
-        int last = 0;
-        int start = sig.indexOf('L');
-        while(start != -1)
-        {
-            newSig.append(sig.substring(last, start));
-            int next = sig.indexOf(';', start);
-            newSig.append('L').append(remap(sig.substring(start + 1, next), classMap)).append(';');
-            last = next + 1;
-            start = sig.indexOf('L', next);
-        }
-        newSig.append(sig.substring(last));
+		int last = 0;
+		int start = sig.indexOf('L');
+		while (start != -1) {
+			newSig.append(sig.substring(last, start));
+			int next = sig.indexOf(';', start);
+			newSig.append('L').append(remapClass(sig.substring(start + 1, next), classMap)).append(';');
+			last = next + 1;
+			start = sig.indexOf('L', next);
+		}
+		newSig.append(sig.substring(last));
 
-        return newSig.toString();
-    }
+		return newSig.toString();
+	}
 
-    protected static String remap(String thing, Map<String, String> map)
-    {
-        if (map.containsKey(thing))
-            return map.get(thing);
-        else
-            return thing;
-    }
-	// End quote
+	/**
+	 * Remaps a fully qualified member (i.e. method or field) name.
+	 *
+	 * @param qualifiedName
+	 *            The fully qualified name, e.g. <code>com/example/Obj/doIt</code>
+	 * @param classMap
+	 *            The class map to use to rename, e.g. <code>{com/example/Obj &rarr;
+	 *            com/example/Thing}</code>
+	 * @return The new name, e.g. <code>com/example/Thing/doIt</code>
+	 */
+	protected static String remapQualifiedName(String qualifiedName, Map<String, String> classMap) {
+		String cls = qualifiedName.substring(0, qualifiedName.lastIndexOf('/'));
+		String name = qualifiedName.substring(cls.length() + 1);
 
-	protected static String remapQualifiedName(String qualified, Map<String, String> classMap) {
-		String cls = qualified.substring(0, qualified.lastIndexOf('/'));
-		String name = qualified.substring(cls.length() + 1);
+		return remapClass(cls, classMap) + '/' + name;
+	}
 
-		return remap(cls, classMap) + '/' + name;
+	/**
+	 * Remaps a class name.
+	 *
+	 * <p>
+	 * Based on the method originally removed in f35ae3952a735efc907da9afb584a9029e852b79.
+	 *
+	 * @param className
+	 *            The original name of the class
+	 * @param classMap
+	 *            The class map to use to rename
+	 * @return The new name if contained in the map, else the old name
+	 */
+	protected static String remapClass(String className, Map<String, String> classMap) {
+		if (classMap.containsKey(className)) {
+			return classMap.get(className);
+		} else {
+			return className;
+		}
 	}
 
 	/**
