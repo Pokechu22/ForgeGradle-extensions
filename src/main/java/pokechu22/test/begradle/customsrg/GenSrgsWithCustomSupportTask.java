@@ -221,7 +221,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 			}
 		}
 
-		// rename methods
+		// Rename methods
 		outSrg.methodMap.putAll(inSrg.methodMap);
 		for (Entry<MethodData, MethodData> e : inSrg.methodMap.entrySet()) {
 			String newSig = remapSig(e.getValue().sig, extraSrg.classMap);
@@ -229,13 +229,20 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 			outSrg.methodMap.put(e.getKey(), new MethodData(newName, newSig));
 		}
 
+		// Rename fields
 		outSrg.fieldMap.putAll(inSrg.fieldMap);
+		for (Entry<String, String> e : inSrg.fieldMap.entrySet()) {
+			String newName = remapQualifiedName(e.getValue(), extraSrg.classMap);
+			outSrg.fieldMap.put(e.getKey(), newName);
+		}
+
+		// Don't do anything with packages
 		outSrg.packageMap.putAll(inSrg.packageMap);
 
 		return outSrg;
 	}
 
-	// These methods were removed in f35ae3952a735efc907da9afb584a9029e852b79 - begin quote
+	// These methods were removed in f35ae3952a735efc907da9afb584a9029e852b79 - quoted w/ modifications
 	protected static String remapMethodName(String qualified, String notchSig, Map<String, String> classMap, Map<MethodData, MethodData> methodMap)
     {
 
@@ -245,16 +252,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
                 return methodMap.get(data).name;
         }
 
-        String cls = qualified.substring(0, qualified.lastIndexOf('/'));
-        String name = qualified.substring(cls.length() + 1);
-        // getProject().getLogger().lifecycle(qualified);
-        // getProject().getLogger().lifecycle(cls + " " + name);
-
-        String ret = classMap.get(cls);
-        if (ret != null)
-            cls = ret;
-
-        return cls + '/' + name;
+        return remapQualifiedName(qualified, classMap);
     }
 
     protected static String remapSig(String sig, Map<String, String> classMap)
@@ -284,6 +282,13 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
             return thing;
     }
 	// End quote
+
+	protected static String remapQualifiedName(String qualified, Map<String, String> classMap) {
+		String cls = qualified.substring(0, qualified.lastIndexOf('/'));
+		String name = qualified.substring(cls.length() + 1);
+
+		return remap(cls, classMap) + '/' + name;
+	}
 
 	/**
 	 * The second task action, which handles the SRG log and the reverse SRG.
