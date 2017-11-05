@@ -197,7 +197,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 	}
 
 	/**
-	 * Remaps one srg with the extra SRG. Based off of
+	 * Remaps one srg with the extra SRG. Loosely based off of
 	 * {@link GenSrgs#readExtraSrgs}, specifically the commented out portion.
 	 *
 	 * @param inSrg
@@ -221,29 +221,13 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 			}
 		}
 
-		// Begin quote
-        // Need to convert these to Notch-SRG names. and add them to the other one.
-        // These Extra SRGs are in MCP->SRG names as they are denoting dev time values.
-        // So we need to swap the values we get.
-
-        HashMap<String, String> excRemap = new HashMap<String, String>(extraSrg.methodMap.size());
-
-        // SRG -> notch map
-        Map<String, String> classMap = inSrg.classMap.inverse();
-        Map<MethodData, MethodData> methodMap = inSrg.methodMap.inverse();
-
-        // rename methods
-        outSrg.methodMap.putAll(inSrg.methodMap);
-        for (Entry<MethodData, MethodData> e : extraSrg.methodMap.inverse().entrySet())
-        {
-            String notchSig = remapSig(e.getValue().sig, classMap);
-            String notchName = remapMethodName(e.getKey().name, notchSig, classMap, methodMap);
-            //getProject().getLogger().lifecycle(e.getKey().name + " " + e.getKey().sig + " " + e.getValue().name + " " + e.getValue().sig);
-            //getProject().getLogger().lifecycle(notchName       + " " + notchSig       + " " + e.getValue().name + " " + e.getValue().sig);
-            outSrg.methodMap.put(new MethodData(notchName, notchSig), e.getValue());
-            excRemap.put(e.getKey().name, e.getValue().name);
-        }
-		// End quote
+		// rename methods
+		outSrg.methodMap.putAll(inSrg.methodMap);
+		for (Entry<MethodData, MethodData> e : inSrg.methodMap.entrySet()) {
+			String newSig = remapSig(e.getValue().sig, extraSrg.classMap);
+			String newName = remapMethodName(e.getValue().name, newSig, extraSrg.classMap, extraSrg.methodMap);
+			outSrg.methodMap.put(e.getKey(), new MethodData(newName, newSig));
+		}
 
 		outSrg.fieldMap.putAll(inSrg.fieldMap);
 		outSrg.packageMap.putAll(inSrg.packageMap);

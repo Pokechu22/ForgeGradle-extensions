@@ -8,7 +8,6 @@ import java.util.Map;
 
 import org.hamcrest.FeatureMatcher;
 import org.hamcrest.Matcher;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import net.minecraftforge.srg2source.rangeapplier.MethodData;
@@ -39,7 +38,6 @@ public class ExtraSRGTest {
 	}
 
 	@Test
-	@Ignore("Known failure")
 	/** Checks remapping of the containing class */
 	public void testMethodRemapClass() {
 		SrgContainer extra = new SrgContainer();
@@ -47,14 +45,13 @@ public class ExtraSRGTest {
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
 		main.methodMap.put(new MethodData("a/b", "()V"),
-				new MethodData("foo/Example/doThing()", "()V"));
+				new MethodData("foo/Example/doThing", "()V"));
 		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
 		assertThat(outSrg.methodMap, maps(new MethodData("a/b", "()V"),
 				new MethodData("foo/Thing/doThing", "()V")));
 	}
 
 	@Test
-	@Ignore("Known failure")
 	/** Checks remapping of the return type */
 	public void testMethodRemapReturnType() {
 		SrgContainer extra = new SrgContainer();
@@ -70,7 +67,6 @@ public class ExtraSRGTest {
 	}
 
 	@Test
-	@Ignore("Known failure")
 	/** Checks remapping of the return type */
 	public void testMethodRemapParamType() {
 		SrgContainer extra = new SrgContainer();
