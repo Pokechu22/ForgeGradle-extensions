@@ -3,7 +3,7 @@ package pokechu22.test.begradle.noinplacereobf;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ListIterator;
+import java.util.concurrent.Callable;
 
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
@@ -14,7 +14,6 @@ import org.gradle.jvm.tasks.Jar;
 import net.minecraftforge.gradle.common.Constants;
 import net.minecraftforge.gradle.user.TaskSingleReobf;
 import net.minecraftforge.gradle.user.UserBasePlugin;
-import net.minecraftforge.gradle.util.caching.WriteCacheAction;
 
 public class NoInPlaceReobfPlugin implements Plugin<Project> {
 	protected Project project;
@@ -29,17 +28,16 @@ public class NoInPlaceReobfPlugin implements Plugin<Project> {
 		TaskSingleReobf reobf = (TaskSingleReobf) project.getTasks().getByName("reobfJar");
 
 		Jar jar = (Jar) project.getTasks().getByName("jar");
-		File originalTarget = jar.getArchivePath();
+		File originalDirectory = jar.getDestinationDir();
+		Callable<File> origTarget = () -> new File(originalDirectory, jar.getArchiveName());
 		jar.setDestinationDir(new File(project.getBuildDir(), "unobfJar"));
-		File newTarget = jar.getArchivePath();
+		Callable<File> newTarget = jar::getArchivePath;
 		File workJar = getWorkJar(reobf);
 
 		reobf.setJar(workJar);
 
 		reobf.doFirst(copy(newTarget, workJar));
-		reobf.doLast(copy(workJar, originalTarget));
-
-		project.getLogger().warn("Moveroni'd: " + reobf.getActions());
+		reobf.doLast(copy(workJar, origTarget));
 	}
 
 	private File getWorkJar(TaskSingleReobf reobf) {
@@ -52,11 +50,13 @@ public class NoInPlaceReobfPlugin implements Plugin<Project> {
 		}
 	}
 
-	private Action<? super Task> copy(File from, File to) {
+	private Action<? super Task> copy(Object from, Object to) {
 		return t -> {
-			t.getLogger().debug("Copying {} to {}", from, to);
+			File fromFile = t.getProject().file(from);
+			File toFile = t.getProject().file(to);
+			t.getLogger().debug("Copying {} ({}) to {} ({})", fromFile, from, toFile, to);
 			try {
-				Constants.copyFile(from, to);
+				Constants.copyFile(fromFile, toFile);
 			} catch (IOException e) {
 				throw new UncheckedIOException(e);
 			}
