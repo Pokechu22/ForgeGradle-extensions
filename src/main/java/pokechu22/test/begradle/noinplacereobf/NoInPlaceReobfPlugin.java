@@ -1,10 +1,19 @@
 package pokechu22.test.begradle.noinplacereobf;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
+import org.apache.commons.io.IOUtils;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -32,17 +41,19 @@ public class NoInPlaceReobfPlugin implements Plugin<Project> {
 		Callable<File> origTarget = () -> new File(originalDirectory, jar.getArchiveName());
 		jar.setDestinationDir(new File(project.getBuildDir(), "unobfJar"));
 		Callable<File> newTarget = jar::getArchivePath;
-		File workJar = getWorkJar(reobf);
+		File workJar = getWorkJar("reobfFakeTarget", reobf);
+		File emptyRemovedJar = getWorkJar("noEmptyFolders", reobf);
 
 		reobf.setJar(workJar);
 
 		reobf.doFirst(copy(newTarget, workJar));
-		reobf.doLast(copy(workJar, origTarget));
+		reobf.doLast(copyRemovingEmptyFolders(workJar, emptyRemovedJar));
+		reobf.doLast(copy(emptyRemovedJar, origTarget));
 	}
 
-	private File getWorkJar(TaskSingleReobf reobf) {
+	private File getWorkJar(String name, TaskSingleReobf reobf) {
 		try {
-			File workJar = File.createTempFile("reobfFakeTarget", ".jar", reobf.getTemporaryDir());
+			File workJar = File.createTempFile(name, ".jar", reobf.getTemporaryDir());
 			workJar.deleteOnExit();
 			return workJar;
 		} catch (IOException e) {
@@ -61,6 +72,44 @@ public class NoInPlaceReobfPlugin implements Plugin<Project> {
 				throw new UncheckedIOException(e);
 			}
 			t.getLogger().debug("Copied.");
+		};
+	}
+
+	private Action<? super Task> copyRemovingEmptyFolders(Object from, Object to) {
+		return (t) -> {
+			File fromFile = t.getProject().file(from);
+			File toFile = t.getProject().file(to);
+			try (ZipFile zip = new ZipFile(fromFile)) {
+				List<ZipEntry> files = zip.stream()
+						.filter(e -> !e.isDirectory())
+						.collect(Collectors.toList());
+				Predicate<ZipEntry> fileOrHasChildren = (dir) -> {
+					return !dir.isDirectory() || files.stream()
+							.anyMatch(e -> e.getName().startsWith(dir.getName()));
+				};
+				if (t.getLogger().isDebugEnabled()) {
+					zip.stream().filter(fileOrHasChildren.negate()).forEachOrdered((e) -> {
+						t.getLogger().debug("Removing folder: " + e.getName());
+					});
+				}
+				List<ZipEntry> entriesToKeep = zip.stream()
+						.filter(fileOrHasChildren)
+						.collect(Collectors.toList());
+
+				try (FileOutputStream outStream = new FileOutputStream(toFile)) {
+					try (ZipOutputStream stream = new ZipOutputStream(outStream)) {
+						for (ZipEntry entry : entriesToKeep) {
+							stream.putNextEntry(entry);
+							try (InputStream entryStream = zip.getInputStream(entry)) {
+								IOUtils.copy(entryStream, stream);
+							}
+							stream.closeEntry();
+						}
+					}
+				}
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
 		};
 	}
 }
