@@ -230,7 +230,8 @@ public class BaseEditPlugin extends
 			versionField.setAccessible(true);
 			Version version = (Version) versionField.get(this);
 			if (version == null) {
-				throw new RuntimeException("mcVersionJson was null");
+				project.getLogger().info("Failed to get version main class as mcVersionJson was null");
+				return "net.minecraft.client.main.Main";
 			}
 			return version.mainClass;
 		} catch (Exception e) {
