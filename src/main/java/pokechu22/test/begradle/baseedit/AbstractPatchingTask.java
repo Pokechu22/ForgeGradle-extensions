@@ -223,7 +223,7 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 			try {
 				newContent = DiffUtils.patch(origContent, patch);
 			} catch (PatchFailedException e) {
-				getLogger().warn("Pating failed for " + className + "!  " + e);
+				getLogger().warn("WARNING: Patching failed for " + className + "!  " + e);
 				getLogger().info("Exception: " + e);
 				getLogger().warn("Saving unpatched version instead...");
 				newContent = origContent;
