@@ -23,19 +23,29 @@ import org.gradle.api.tasks.TaskValidationException;
  * generating them. It also validates the base folders.
  */
 public class ProcessBasePatchesTask extends AbstractPatchingTask {
+	// NOTE: Calls to mkdirs are due to https://github.com/gradle/gradle/issues/2016:
+	// there is no way to specify an InputDirectory that doesn't exist.
 	@Override
 	@InputDirectory
 	@OutputDirectory
 	@Optional
 	public File getPatches() {
-		return super.getPatches();
+		File patches = super.getPatches();
+		if (!patches.exists()) {
+			patches.mkdirs();
+		}
+		return patches;
 	}
 	@Override
 	@InputDirectory
 	@OutputDirectory
 	@Optional
 	public File getPatchedSource() {
-		return super.getPatchedSource();
+		File patchedSource = super.getPatchedSource();
+		if (!patchedSource.exists()) {
+			patchedSource.mkdirs();
+		}
+		return patchedSource;
 	}
 
 	@TaskAction
