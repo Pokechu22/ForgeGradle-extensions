@@ -21,6 +21,7 @@ import org.gradle.api.Task;
 import org.gradle.jvm.tasks.Jar;
 
 import net.minecraftforge.gradle.common.Constants;
+import net.minecraftforge.gradle.user.TaskExtractAnnotations;
 import net.minecraftforge.gradle.user.TaskSingleReobf;
 import net.minecraftforge.gradle.user.UserBasePlugin;
 
@@ -48,12 +49,25 @@ public class NoInPlaceReobfPlugin implements Plugin<Project> {
 
 		reobf.doFirst(copy(newTarget, workJar));
 		reobf.doLast(copyRemovingEmptyFolders(workJar, emptyRemovedJar));
-		reobf.doLast(copy(emptyRemovedJar, origTarget));
+
+		// The extractAnnotationsJar also works in-place, currently.  Stop that too.
+		// Also, it previously targeted the wrong jar, which is a problem.
+		if (project.getTasks().findByName("extractAnnotationsJar") != null) {
+			TaskExtractAnnotations extract = (TaskExtractAnnotations) project.getTasks().getByName("extractAnnotationsJar");
+
+			File extractWorkJar = getWorkJar("extractFakeTarget", extract);
+			extract.setJar(extractWorkJar);
+
+			extract.doFirst(copy(emptyRemovedJar, extractWorkJar));
+			extract.doLast(copy(extractWorkJar, origTarget));
+		} else {
+			reobf.doLast(copy(emptyRemovedJar, origTarget));
+		}
 	}
 
-	private File getWorkJar(String name, TaskSingleReobf reobf) {
+	private File getWorkJar(String name, Task task) {
 		try {
-			File workJar = File.createTempFile(name, ".jar", reobf.getTemporaryDir());
+			File workJar = File.createTempFile(name, ".jar", task.getTemporaryDir());
 			workJar.deleteOnExit();
 			return workJar;
 		} catch (IOException e) {
