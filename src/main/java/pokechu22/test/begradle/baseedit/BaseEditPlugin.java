@@ -19,6 +19,7 @@ import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 import net.minecraftforge.gradle.util.json.version.Version;
 
 import org.gradle.api.Action;
+import org.gradle.api.Task;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -178,8 +179,14 @@ public class BaseEditPlugin extends
 			// it can overwrite vanilla code
 			exec.classpath(jarTask.getArchivePath());
 		}
-		
+
 		super.afterEvaluate();  // Among other things, sets up the other classpaths
+
+		// Disable the extractAnnotationsJar task; it's not useful for base edits
+		Task extractTask = project.getTasks().findByName("extractAnnotationsJar");
+		if (extractTask != null) {
+			extractTask.setEnabled(false);
+		}
 	}
 
 	@Override

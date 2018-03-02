@@ -50,19 +50,25 @@ public class NoInPlaceReobfPlugin implements Plugin<Project> {
 		reobf.doFirst(copy(newTarget, workJar));
 		reobf.doLast(copyRemovingEmptyFolders(workJar, emptyRemovedJar));
 
-		// The extractAnnotationsJar also works in-place, currently.  Stop that too.
-		// Also, it previously targeted the wrong jar, which is a problem.
-		if (project.getTasks().findByName("extractAnnotationsJar") != null) {
-			TaskExtractAnnotations extract = (TaskExtractAnnotations) project.getTasks().getByName("extractAnnotationsJar");
+		// Decide on what to do with the extract task after evaluation
+		project.afterEvaluate(p -> {
+			// The extractAnnotationsJar also works in-place, currently.  Stop that too.
+			// Also, it previously targeted the wrong jar, which is a problem.
 
-			File extractWorkJar = getWorkJar("extractFakeTarget", extract);
-			extract.setJar(extractWorkJar);
+			// However: on base edits, we do not want the extract task enabled at all.
+			Task extractTask = project.getTasks().findByName("extractAnnotationsJar");
+			if (extractTask != null && extractTask.getEnabled()) {
+				TaskExtractAnnotations extract = (TaskExtractAnnotations) extractTask;
 
-			extract.doFirst(copy(emptyRemovedJar, extractWorkJar));
-			extract.doLast(copy(extractWorkJar, origTarget));
-		} else {
-			reobf.doLast(copy(emptyRemovedJar, origTarget));
-		}
+				File extractWorkJar = getWorkJar("extractFakeTarget", extract);
+				extract.setJar(extractWorkJar);
+
+				extract.doFirst(copy(emptyRemovedJar, extractWorkJar));
+				extract.doLast(copy(extractWorkJar, origTarget));
+			} else {
+				reobf.doLast(copy(emptyRemovedJar, origTarget));
+			}
+		});
 	}
 
 	private File getWorkJar(String name, Task task) {
