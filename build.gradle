@@ -29,7 +29,7 @@ apply plugin: 'eclipse'
 apply plugin: 'maven'
 
 group = 'pokechu22.test.begradle'
-version = '0.1.3-SNAPSHOT'
+version = '0.1.3'
 archivesBaseName = 'begradle'
 targetCompatibility = '1.8'
 sourceCompatibility = '1.8'
