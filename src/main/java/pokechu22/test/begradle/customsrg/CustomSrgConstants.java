@@ -48,4 +48,5 @@ public class CustomSrgConstants {
 	// And finally, new constants
 	public static final String CUSTOM_SRG_LOG = DIR_CUSTOM_MCP_MAPPINGS + "/" + Constants.REPLACE_MC_VERSION + "/srgs/custom_srg.txt";
 	public static final String CUSTOM_REVERSE_SRG = DIR_CUSTOM_MCP_MAPPINGS + "/" + Constants.REPLACE_MC_VERSION + "/srgs/reverse.srg";
+	public static final String CUSTOM_REMAPPED_IN_EXC = DIR_CUSTOM_MCP_MAPPINGS + "/" + Constants.REPLACE_MC_VERSION + "/srgs/joined_remapped.exc";
 }

@@ -24,6 +24,7 @@ import org.gradle.api.tasks.OutputFiles;
 import org.gradle.api.tasks.TaskAction;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
 import com.google.common.io.Files;
 
 /**
@@ -90,6 +91,22 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 		throw new RuntimeException("addExtraSrg doesn't work; use the extraSrgs block");
 	}
 
+	private Object remappedInExc;
+	/**
+	 * Gets the location to save the remapped version of the in EXC.
+	 * @return The remapped in EXC.
+	 */
+	public File getRemappedInExc() {
+		return getProject().file(remappedInExc);
+	}
+	/**
+	 * Sets the location to save the remapped version of the in EXC.
+	 * @param remappedInExc The remapped in EXC.
+	 */
+	public void setRemappedInExc(Object remappedInExc) {
+		this.remappedInExc = remappedInExc;
+	}
+
 	/**
 	 * Copy settings from the previous version of this task.
 	 *
@@ -148,6 +165,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
         writeOutSrgs(newSrg, methods, fields);
 
         // do EXC stuff
+        this.makeRemappedInExc(extraSrg);
         writeOutExcs(newSrg, Collections.emptyMap(), methods);
 
 		// End quote
@@ -186,9 +204,22 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 			throw new RuntimeException("Failed to invoke readwriteOutSrgsCSVs", ex);
 		}
 	}
+
+	// Hack -- super.writeOutExcs uses getInExc; redirect it when needed.
+	private boolean writingExcs = false;
+	@Override
+	public File getInExc() {
+		if (this.writingExcs) {
+			return this.getRemappedInExc();
+		}
+		return super.getInExc();
+	}
+
 	protected void writeOutExcs(SrgContainer inSrg, Map<String, String> excRemap, Map<String, String> methods) throws IOException {
 		try {
+			this.writingExcs = true;
 			writeOutExcs.invoke(this, inSrg, excRemap, methods);
+			this.writingExcs = false;
 		} catch (IllegalAccessException | IllegalArgumentException ex) {
 			throw new AssertionError("Failed to invoke writeOutExcs", ex);
 		} catch (InvocationTargetException ex) {
@@ -233,6 +264,90 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 		outSrg.packageMap.putAll(inSrg.packageMap);
 
 		return outSrg;
+	}
+
+	/**
+	 * Remaps the contents of the EXC file, based on the SRG.
+	 *
+	 * @param extraSrg The extra SRG. Only its {@link SrgContainer#classMap
+	 *                 classMap} is used.
+	 * @throws IOException when an IO error occurs.
+	 */
+	protected void makeRemappedInExc(SrgContainer extraSrg) throws IOException {
+		List<String> inLines = Files.readLines(super.getInExc(), Charsets.UTF_8);
+		List<String> outLines = new ArrayList<>();
+		Joiner comma = Joiner.on(',');
+
+		for (String line : inLines) {
+			if (line.startsWith("#")) {
+				outLines.add(line);
+			} else {
+				String[] pts = line.split("=");
+
+				// Target method signature - e.g. net/minecraft/Foo.doThing(Ljava/lang/Object;)V
+				String method = pts[0];
+				// Contains Exception1,Exception2|param1,param2
+				String value = pts[1];
+
+				// Remap method class and signature
+				int dotIndex = method.indexOf('.');
+				int sigIndex = method.indexOf('(');
+				if (dotIndex == -1 || sigIndex == -1) {
+					// Not actually method -- e.g. max_constructor_index
+					outLines.add(line);
+					continue;
+				}
+				if (dotIndex > sigIndex) {
+					throw new RuntimeException("Weird EXC line: '" + line + "'");
+				}
+
+				String oldClass = method.substring(0, dotIndex);
+				String name = method.substring(dotIndex + 1, sigIndex);
+				String oldSignature = method.substring(sigIndex);
+
+				String newClass = remapClass(oldClass, extraSrg.classMap);
+				String newSignature = remapMethodDescriptor(oldSignature, extraSrg.classMap);
+				String newMethod = newClass + "." + name + newSignature;
+
+				String newValue;
+				if (!method.endsWith("Access")) {
+					int lineIndex = value.indexOf('|');
+					String exceptionsLine, remainder;
+					if (lineIndex >= 0) {
+						exceptionsLine = value.substring(0, lineIndex);
+						remainder = value.substring(lineIndex + 1);
+					} else {
+						exceptionsLine = value;
+						remainder = "";
+					}
+
+					String[] exceptions;
+					if (!exceptionsLine.isEmpty()) {
+						exceptions = exceptionsLine.split(",");
+					} else {
+						// "".split(",") produces a 1-element array containing the empty string
+						exceptions = new String[0];
+					}
+
+					String[] newExceptions = new String[exceptions.length];
+					for (int i = 0; i < exceptions.length; i++) {
+						newExceptions[i] = remapClass(exceptions[i], extraSrg.classMap);
+					}
+
+					newValue = comma.join(newExceptions) + '|' + remainder;
+				} else {
+					newValue = value;
+				}
+				outLines.add(newMethod + '=' + newValue);
+			}
+		}
+
+		try (BufferedWriter out = Files.newWriter(getRemappedInExc(), Charsets.UTF_8)) {
+			for (String line : outLines) {
+				out.write(line);
+				out.newLine();
+			}
+		}
 	}
 
 	/**

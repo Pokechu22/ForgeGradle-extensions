@@ -133,6 +133,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 				TASK_GENERATE_SRGS, GenSrgsWithCustomSupportTask.class);
 		task.copyFrom(origGenSrgs);
 		task.setSrgLog(delayedFile(CUSTOM_SRG_LOG));
+		task.setRemappedInExc(delayedFile(CUSTOM_REMAPPED_IN_EXC));
 		task.setReverseSrg(delayedFile(CUSTOM_REVERSE_SRG));
 		task.setExtraSrgs(extraSrgContainer.getSrgs());
 		task.setMethodsCsv(delayedFile(CUSTOM_CSV_METHOD));
