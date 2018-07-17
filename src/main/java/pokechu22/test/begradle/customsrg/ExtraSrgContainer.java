@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.io.FilenameUtils;
+import org.gradle.internal.impldep.org.apache.commons.codec.digest.DigestUtils;
 import org.gradle.util.ConfigureUtil;
 
 /**
@@ -87,11 +88,13 @@ public final class ExtraSrgContainer {
 			names[i++] = "f_" + FilenameUtils.getBaseName(file.getAbsolutePath());
 		}
 		Arrays.sort(names);
-		StringBuilder sb = new StringBuilder("custom");
+		StringBuilder sb = new StringBuilder();
 		for (String s : names) {
 			sb.append('_').append(s);
 		}
-		return sb.toString();
+		// Prevent excessively long file names by taking a hash (and not even
+		// using the full hash in that case)
+		return "custom_" + DigestUtils.shaHex(sb.toString()).substring(0, 16);
 	}
 
 	/**
