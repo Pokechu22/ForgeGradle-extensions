@@ -1,18 +1,18 @@
 package pokechu22.test.begradle.langrenamer;
 
-import groovy.lang.Closure;
-
 import java.util.Locale;
 import java.util.concurrent.Callable;
 
-import net.minecraftforge.gradle.common.Constants;
-
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.file.FileCopyDetails;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.plugins.ExtraPropertiesExtension;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.language.jvm.tasks.ProcessResources;
+
+import groovy.lang.Closure;
+import net.minecraftforge.gradle.common.Constants;
 
 /**
  * Adds a property, <code>ext.renameLangFiles</code>, that controls whether
@@ -25,14 +25,17 @@ public class LangRenamerPlugin implements Plugin<Project> {
 	public void apply(Project project) {
 		ExtensionAware extension = (ExtensionAware) project.getExtensions().getByName(Constants.EXT_NAME_MC);
 		ExtraPropertiesExtension ext = extension.getExtensions().getExtraProperties();
-		ext.set("renameLangFiles", false);
+		ext.set("lowercaseLangFiles", false);
+		ext.set("jsonLangFiles", false);
 
 		// Manage up to date check.  As far as I can tell, this is the correct way of
 		// doing this (only reruns when the value is changed).
 		TaskContainer tasks = project.getTasks();
 		ProcessResources resourcesTask = (ProcessResources) tasks.getByName("processResources");
-		Callable<Object> callable = () -> ext.get("renameLangFiles");
-		resourcesTask.getInputs().property("renameLangFiles", callable);
+		Callable<Object> lowercaseLangFilesCallable = () -> ext.get("lowercaseLangFiles");
+		resourcesTask.getInputs().property("lowercaseLangFiles", lowercaseLangFilesCallable);
+		Callable<Object> jsonLangFilesCallable = () -> ext.get("jsonLangFiles");
+		resourcesTask.getInputs().property("jsonLangFiles", jsonLangFilesCallable);
 
 		project.afterEvaluate(this::afterEvaluate);
 	}
@@ -43,7 +46,9 @@ public class LangRenamerPlugin implements Plugin<Project> {
 		ProcessResources resourcesTask = (ProcessResources) tasks.getByName("processResources");
 		ExtensionAware extension = (ExtensionAware) project.getExtensions().getByName(Constants.EXT_NAME_MC);
 		ExtraPropertiesExtension ext = extension.getExtensions().getExtraProperties();
-		boolean renameLangFiles = (boolean) ext.get("renameLangFiles");
+		boolean renameLangFiles = (boolean) ext.get("lowercaseLangFiles");
+		boolean jsonLangFiles = (boolean) ext.get("jsonLangFiles");
+
 		if (renameLangFiles) {
 			resourcesTask.rename(new Closure<String>(LangRenamerPlugin.this, LangRenamerPlugin.class) {
 				@Override
@@ -69,6 +74,16 @@ public class LangRenamerPlugin implements Plugin<Project> {
 					}
 				}
 			});
+		}
+		if (jsonLangFiles) {
+			resourcesTask.eachFile(this::jsonifyFile);
+		}
+	}
+
+	private void jsonifyFile(FileCopyDetails spec) {
+		if (spec.getName().endsWith(".lang")) {
+			spec.filter(JsonifyFilterReader.class);
+			spec.setName(spec.getName().replace(".lang", ".json"));
 		}
 	}
 }
