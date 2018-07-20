@@ -1,17 +1,20 @@
 package pokechu22.test.begradle.langrenamer;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.file.FileCopyDetails;
+import org.gradle.api.file.RelativePath;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.plugins.ExtraPropertiesExtension;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.language.jvm.tasks.ProcessResources;
 
-import groovy.lang.Closure;
 import net.minecraftforge.gradle.common.Constants;
 
 /**
@@ -27,6 +30,7 @@ public class LangRenamerPlugin implements Plugin<Project> {
 		ExtraPropertiesExtension ext = extension.getExtensions().getExtraProperties();
 		ext.set("capitalizeLangFiles", false);
 		ext.set("jsonLangFiles", false);
+		ext.set("langMap", Collections.<String, List<String>>emptyMap());
 
 		// Manage up to date check.  As far as I can tell, this is the correct way of
 		// doing this (only reruns when the value is changed).
@@ -36,11 +40,13 @@ public class LangRenamerPlugin implements Plugin<Project> {
 		resourcesTask.getInputs().property("capitalizeLangFiles", capitalizeLangFilesCallable);
 		Callable<Object> jsonLangFilesCallable = () -> ext.get("jsonLangFiles");
 		resourcesTask.getInputs().property("jsonLangFiles", jsonLangFilesCallable);
+		Callable<Object> langMapCallable = () -> ext.get("langMap");
+		resourcesTask.getInputs().property("langMap", langMapCallable);
 
 		project.afterEvaluate(this::afterEvaluate);
 	}
 
-	@SuppressWarnings("serial")
+	@SuppressWarnings("unchecked")
 	private void afterEvaluate(Project project) {
 		TaskContainer tasks = project.getTasks();
 		ProcessResources resourcesTask = (ProcessResources) tasks.getByName("processResources");
@@ -48,42 +54,58 @@ public class LangRenamerPlugin implements Plugin<Project> {
 		ExtraPropertiesExtension ext = extension.getExtensions().getExtraProperties();
 		boolean capitalizeLangFiles = (boolean) ext.get("capitalizeLangFiles");
 		boolean jsonLangFiles = (boolean) ext.get("jsonLangFiles");
+		Map<String, List<String>> langMap = (Map<String, List<String>>) ext.get("langMap");
 
-		if (capitalizeLangFiles) {
-			resourcesTask.rename(new Closure<String>(LangRenamerPlugin.this, LangRenamerPlugin.class) {
-				@Override
-				public String call(Object arguments) {
-					String name = (String) arguments; // e.g. "en_us.lang"
-					project.getLogger().trace("Checking if '" + name + "' should be renamed...");
-					if (name.endsWith(".lang")) {
-						int underscore = name.lastIndexOf("_");
-						int lang = name.lastIndexOf(".lang");
-						String prefix = name.substring(0, underscore); // e.g. "en"
-						String suffix = name.substring(underscore, lang); // e.g. "_us"
-						if (!suffix.equals(suffix.toLowerCase(Locale.ROOT))) {
-							throw new RuntimeException("Bad locale file name '" + name + "': file on disk's name should be lowercase");
-						}
+		resourcesTask.eachFile((spec) -> {
+			if (isLanguageFile(spec)) {
+				String name = extractLanguageName(spec);
+				String fileExtension = jsonLangFiles ? ".json" : ".lang";
+				String newName = capitalizeLangFiles ? capitalizeLanguageName(name) : name;
 
-						String newName = prefix + suffix.toUpperCase(Locale.ROOT) + ".lang";
-						project.getLogger().debug("Renaming '" + name + "' to '" + newName + "'.");
-
-						return newName;
-					} else {
-						project.getLogger().trace("Doesn't need a rename.");
-						return null;
-					}
+				if (jsonLangFiles) {
+					jsonifyFile(spec);
 				}
-			});
+				spec.setName(newName + fileExtension);
+				if (langMap.containsKey(name)) {
+					for (String language : langMap.get(name)) {
+						if (language.equals(name)) {
+							project.getLogger().warn(project + ": langMap for " + name + " contains itself");
+							continue;
+						}
+						String newLanguage = capitalizeLangFiles ? capitalizeLanguageName(language) : language;
+						RelativePath path = spec.getRelativePath().replaceLastName(newLanguage + fileExtension);
+						project.getLogger().info(project + ": Copying " + name + " to " + language);
+						spec.copyTo(path.getFile(resourcesTask.getDestinationDir()));
+					}
+				} else {
+					project.getLogger().info(project + ": No langMap info for language " + name);
+				}
+			}
+		});
+	}
+
+	private boolean isLanguageFile(FileCopyDetails spec) {
+		return spec.getSourceName().endsWith(".lang");
+	}
+
+	// Returns e.g. en_us
+	private String extractLanguageName(FileCopyDetails spec) {
+		assert isLanguageFile(spec);
+		return spec.getSourceName().replace(".lang", "");
+	}
+
+	// Converts en_us to en_US
+	private String capitalizeLanguageName(String lowercaseName) {
+		int underscore = lowercaseName.lastIndexOf("_");
+		String prefix = lowercaseName.substring(0, underscore); // e.g. "en"
+		String suffix = lowercaseName.substring(underscore); // e.g. "_us"
+		if (!suffix.equals(suffix.toLowerCase(Locale.ROOT))) {
+			throw new RuntimeException("Bad locale name '" + lowercaseName + "': name should be lowercase");
 		}
-		if (jsonLangFiles) {
-			resourcesTask.eachFile(this::jsonifyFile);
-		}
+		return prefix + suffix.toUpperCase(Locale.ROOT);
 	}
 
 	private void jsonifyFile(FileCopyDetails spec) {
-		if (spec.getName().endsWith(".lang")) {
-			spec.filter(JsonifyFilterReader.class);
-			spec.setName(spec.getName().replace(".lang", ".json"));
-		}
+		spec.filter(JsonifyFilterReader.class);
 	}
 }
