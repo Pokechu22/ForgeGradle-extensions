@@ -27,7 +27,12 @@ import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskContainer;
+import org.gradle.internal.MutableActionSet;
 import org.gradle.jvm.tasks.Jar;
+import org.gradle.plugins.ide.eclipse.model.Classpath;
+import org.gradle.plugins.ide.eclipse.model.ClasspathEntry;
+import org.gradle.plugins.ide.eclipse.model.EclipseModel;
+import org.gradle.plugins.ide.eclipse.model.SourceFolder;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
@@ -360,5 +365,32 @@ public class BaseEditPlugin extends
 
 		throw new RuntimeException("Unable to obtain url (" + strUrl
 				+ ") with etag!");
+	}
+
+	@Override
+	protected void configureEclipse() {
+		super.configureEclipse();
+		try {
+			MutableActionSet.class.getName();
+		} catch (Throwable t) {
+			project.getLogger().warn("MutableActionSet is not defined; outdated gradle version?  Unable to ignore compile problems for base sources.");
+			return;
+		}
+		EclipseModel eclipseConv = (EclipseModel) project.getExtensions().getByName("eclipse");
+		@SuppressWarnings("unchecked")
+		MutableActionSet<Classpath> whenMerged = eclipseConv.getClasspath().getFile().getWhenMerged();
+		whenMerged.add(new Action<Classpath>() {
+			@Override
+			public void execute(Classpath classpath) {
+				for (ClasspathEntry entry : classpath.getEntries()) {
+					if (entry instanceof SourceFolder) {
+						SourceFolder sf = (SourceFolder)entry;
+						if (sf.getPath().contains("base")) { // XXX this check is sub-optimal and could have false positives
+							sf.getEntryAttributes().put("ignore_optional_problems", "true");
+						}
+					}
+				}
+			}
+		});
 	}
 }
