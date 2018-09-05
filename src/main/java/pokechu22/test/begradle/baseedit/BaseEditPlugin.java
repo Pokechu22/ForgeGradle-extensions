@@ -20,6 +20,7 @@ import net.minecraftforge.gradle.util.json.version.Version;
 
 import org.gradle.api.Action;
 import org.gradle.api.Task;
+import org.gradle.api.UncheckedIOException;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -30,7 +31,6 @@ import org.gradle.jvm.tasks.Jar;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
-import com.google.common.base.Throwables;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 
@@ -354,7 +354,7 @@ public class BaseEditPlugin extends
 			try {
 				return Files.toString(cache, Charsets.UTF_8);
 			} catch (IOException e) {
-				Throwables.propagate(e);
+				throw new UncheckedIOException(e);
 			}
 		}
 
