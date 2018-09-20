@@ -33,6 +33,6 @@ public class JsonifyFilterReader extends FilterReader {
 		return properties.entrySet().stream()
 				.collect(Collectors.toMap(
 						entry -> (String)entry.getKey(),
-						entry -> ((String)entry.getValue()).replaceAll("\n", "\\n")));
+						entry -> ((String)entry.getValue()).replaceAll("\n", "\\\\n")));
 	}
 }
