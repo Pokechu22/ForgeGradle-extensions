@@ -27,7 +27,7 @@ import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskContainer;
-import org.gradle.internal.MutableActionSet;
+import org.gradle.internal.MutableActionSet; // If this class does not exist, make sure you are using gradle 3.5 or newer
 import org.gradle.jvm.tasks.Jar;
 import org.gradle.plugins.ide.eclipse.model.Classpath;
 import org.gradle.plugins.ide.eclipse.model.ClasspathEntry;
