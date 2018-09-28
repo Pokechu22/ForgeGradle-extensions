@@ -13,6 +13,7 @@ import org.gradle.api.file.RelativePath;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.plugins.ExtraPropertiesExtension;
 import org.gradle.api.tasks.TaskContainer;
+import org.gradle.api.tasks.TaskInputs;
 import org.gradle.language.jvm.tasks.ProcessResources;
 
 import net.minecraftforge.gradle.common.Constants;
@@ -36,12 +37,13 @@ public class LangRenamerPlugin implements Plugin<Project> {
 		// doing this (only reruns when the value is changed).
 		TaskContainer tasks = project.getTasks();
 		ProcessResources resourcesTask = (ProcessResources) tasks.getByName("processResources");
+		TaskInputs inputs = resourcesTask.getInputs();
 		Callable<Object> capitalizeLangFilesCallable = () -> ext.get("capitalizeLangFiles");
-		resourcesTask.getInputs().property("capitalizeLangFiles", capitalizeLangFilesCallable);
+		inputs.property("capitalizeLangFiles", capitalizeLangFilesCallable);
 		Callable<Object> jsonLangFilesCallable = () -> ext.get("jsonLangFiles");
-		resourcesTask.getInputs().property("jsonLangFiles", jsonLangFilesCallable);
+		inputs.property("jsonLangFiles", jsonLangFilesCallable);
 		Callable<Object> langMapCallable = () -> ext.get("langMap");
-		resourcesTask.getInputs().property("langMap", langMapCallable);
+		inputs.property("langMap", langMapCallable);
 
 		project.afterEvaluate(this::afterEvaluate);
 	}
