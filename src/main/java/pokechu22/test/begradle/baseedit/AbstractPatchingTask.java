@@ -35,7 +35,7 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 	private Object patchedSource;
 	private Object origJar;
 	private Callable<List<String>> baseClasses;
-	
+
 	protected AbstractPatchingTask() {
 		this.onlyIf(new Spec<Task>() {
 			@Override
@@ -96,7 +96,15 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 	 * @return The folder that does/will contain patches.
 	 */
 	public File getPatches() {
-		return getProject().file(this.patches);
+		// NOTE: Calls to mkdirs are due to https://github.com/gradle/gradle/issues/2016:
+		// there is no way to specify an InputDirectory that doesn't exist.
+		// However, we only want to call it if there are actual patches;
+		// no point in making a folder that won't be used.
+		File patches = getProject().file(this.patches);
+		if (!getBaseClasses().isEmpty() && !patches.exists()) {
+			patches.mkdirs();
+		}
+		return patches;
 	}
 	/**
 	 * Sets the folder that does/will contain modified source. 
@@ -110,7 +118,15 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 	 * @return The folder that does/will contain modified source.
 	 */
 	public File getPatchedSource() {
-		return getProject().file(patchedSource);
+		// NOTE: Calls to mkdirs are due to https://github.com/gradle/gradle/issues/2016:
+		// there is no way to specify an InputDirectory that doesn't exist.
+		// However, we only want to call it if there are actual patches;
+		// no point in making a folder that won't be used.
+		File patchedSource = getProject().file(this.patchedSource);
+		if (!getBaseClasses().isEmpty() && !patchedSource.exists()) {
+			patchedSource.mkdirs();
+		}
+		return patchedSource;
 	}
 	/**
 	 * Sets the path to the unmodified, original deobfuscated source jar.
