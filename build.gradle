@@ -72,10 +72,6 @@ dependencies {
 	compile 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
 }
 
-task wrapper(type: Wrapper) {
-	gradleVersion = '2.14'
-}
-
 sourceSets {
 	main.compileClasspath += configurations.shade;
 	main.runtimeClasspath += configurations.shade;
