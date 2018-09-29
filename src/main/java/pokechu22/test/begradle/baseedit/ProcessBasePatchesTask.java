@@ -15,6 +15,7 @@ import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
+import org.gradle.api.tasks.SkipWhenEmpty;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskValidationException;
 
@@ -26,6 +27,7 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 	@Override
 	@InputDirectory
 	@OutputDirectory
+	@SkipWhenEmpty
 	@Optional
 	public File getPatches() {
 		return super.getPatches();
@@ -33,6 +35,7 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 	@Override
 	@InputDirectory
 	@OutputDirectory
+	@SkipWhenEmpty
 	@Optional
 	public File getPatchedSource() {
 		return super.getPatchedSource();

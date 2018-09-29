@@ -16,7 +16,6 @@ import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Task;
-import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFile;
 
@@ -37,13 +36,6 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 	private Callable<List<String>> baseClasses;
 
 	protected AbstractPatchingTask() {
-		this.onlyIf(new Spec<Task>() {
-			@Override
-			public boolean isSatisfiedBy(Task element) {
-				// If there are no base classes, do nothing.
-				return !((AbstractPatchingTask) element).getBaseClasses().isEmpty();
-			}
-		});
 		this.doFirst(new Action<Task>() {
 			@Override
 			public void execute(Task t) {

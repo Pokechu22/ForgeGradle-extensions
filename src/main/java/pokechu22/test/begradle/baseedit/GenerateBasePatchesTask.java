@@ -8,6 +8,7 @@ import java.util.jar.JarFile;
 import org.apache.commons.io.FileUtils;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.OutputDirectory;
+import org.gradle.api.tasks.SkipWhenEmpty;
 import org.gradle.api.tasks.TaskAction;
 
 /**
@@ -22,6 +23,7 @@ public class GenerateBasePatchesTask extends AbstractPatchingTask {
 	}
 	@Override
 	@InputDirectory
+	@SkipWhenEmpty
 	public File getPatchedSource() {
 		return super.getPatchedSource();
 	}
