@@ -73,7 +73,7 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 		getLogger().debug("Unused patches: " + unusedPatches);
 
 		List<String> unusedClasses = new ArrayList<>(baseClasses);
-		recurseFolder(getPatchedSource(), "", baseClasses, unusedClasses, problems);
+		recursivelyCheckBaseSrcFolder(getPatchedSource(), "", baseClasses, unusedClasses, problems);
 		getLogger().debug("Unused classes: " + unusedClasses);
 
 		if (!problems.isEmpty()) {
@@ -87,7 +87,10 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 		unused.addAll(unusedPatches);
 		unused.addAll(unusedClasses);
 
-		try (JarFile jar = new JarFile(getOrigJar())) {
+		// Now apply/generate the patches.
+		File jarFile = getOrigJar();
+		try (JarFile jar = new JarFile(jarFile)) {
+			// Work through cases where we are missing one or the other.
 			for (String className : unused) {
 				if (unusedPatches.contains(className)) {
 					if (unusedClasses.contains(className)) {
@@ -110,16 +113,55 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 					}
 				}
 			}
-			// OK, now we generate patches for the known classes.
+
+			// The remaining files have both a patch and source.
+			// Decide what to do with them based on modified date.
 			List<String> used = new ArrayList<>(baseClasses);
 			used.removeAll(unused);
+			long jarAge = jarFile.lastModified();
+			getLogger().debug("Jar file age: " + jarAge);
 			for (String className : used) {
-				genPatch(className, jar);
+				File source = getPatchedSource(className);
+				File patch = getPatch(className);
+				long sourceAge = source.lastModified();
+				long patchAge = patch.lastModified();
+				getLogger().debug("Class " + className + ": source age " + sourceAge + ", patch age " + patchAge);
+
+				if (jarAge > sourceAge) {
+					// If the jar is newer than the source, then mappings have probably been updated
+					// and patches should be applied.
+					getLogger().debug("Applying patch as the jar is newer than the source.");
+					applyPatch(className, jar);
+				} else if (patchAge > sourceAge) {
+					// If the patch is newer than the source, then again we should apply patches.
+					getLogger().debug("Applying patch as the patch is newer than the source.");
+					applyPatch(className, jar);
+				} else {
+					// Otherwise, generate patches. This occurs both when the source is newer than
+					// the patch, and as a default case when the ages are the same (or lastModified
+					// returns 0).
+					getLogger().debug("Making patch as the source is newer than the patch."); 
+					genPatch(className, jar);
+					// We don't want the patch to be newer than the source file as that'd cause it
+					// to be applied next time, which is confusing
+					patch.setLastModified(sourceAge);
+				}
 			}
 		}
 	}
 
-	private void recurseFolder(File from, String classNameSoFar,
+	/**
+	 * Recursively searches through the src/main/base (or test or similar) folder,
+	 * looking for incorrectly placed files.
+	 *
+	 * @param from           The folder to start in
+	 * @param classNameSoFar The name of the package, with a trailing dot as needed.
+	 * @param baseClasses    A list of expected class names.
+	 * @param unusedClasses  A list of class names that have NOT been found yet. As
+	 *                       classes are found, they are removed from this list.
+	 * @param problems       List of problems found during this process.
+	 */
+	private void recursivelyCheckBaseSrcFolder(File from, String classNameSoFar,
 			List<String> baseClasses, List<String> unusedClasses,
 			List<InvalidUserDataException> problems) {
 		if (!from.exists()) {
@@ -127,7 +169,7 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 		}
 		for (File file : from.listFiles()) {
 			if (file.isDirectory()) {
-				recurseFolder(file, classNameSoFar + file.getName() + ".", baseClasses,
+				recursivelyCheckBaseSrcFolder(file, classNameSoFar + file.getName() + ".", baseClasses,
 						unusedClasses, problems);
 			} else {
 				String className = classNameSoFar + file.getName();
