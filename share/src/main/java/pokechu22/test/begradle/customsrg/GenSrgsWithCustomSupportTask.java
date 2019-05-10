@@ -154,8 +154,8 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 
 		// Begin quote from original
         // csv data.  SRG -> MCP
-        HashMap<String, String> methods = new HashMap<String, String>();
-        HashMap<String, String> fields = new HashMap<String, String>();
+        Map<String, String> methods = new HashMap<>();
+        Map<String, String> fields = new HashMap<>();
         readCSVs(getMethodsCsv(), getFieldsCsv(), methods, fields);
 
         // Do SRG stuff
@@ -447,7 +447,7 @@ public class GenSrgsWithCustomSupportTask extends GenSrgs {
 
 	protected void writeReverseSrg() throws IOException {
 		// Convert to a list so that we can reverse it.
-		List<File> extraSrgs = new ArrayList<File>(getExtraSrgs().getFiles());
+		List<File> extraSrgs = new ArrayList<>(getExtraSrgs().getFiles());
 		Collections.reverse(extraSrgs);
 		// We need to reverse the list to reverse priorities; thus, duplicate entries
 		// are handled in the opposite order.  Well, technically that behavior may be

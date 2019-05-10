@@ -115,7 +115,7 @@ public class ExtraSRGTest {
 		}
 		public static <K, V> Matcher<Map<? extends K, ? extends V>> isMapWithSize(int size) {
 			Matcher<? super Integer> matcher = equalTo(size);
-			return new IsMapWithSize<K, V>(matcher);
+			return new IsMapWithSize<>(matcher);
 		}
 	}
 }
