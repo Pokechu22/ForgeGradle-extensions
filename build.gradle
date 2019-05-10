@@ -19,101 +19,114 @@ buildscript {
 	}
 }
 
-// Compiling
-apply plugin: 'java'
-// idea IDE
-apply plugin: 'idea'
-// eclipse IDE
-apply plugin: 'eclipse'
-// Needed to use content from maven repos
-apply plugin: 'maven'
+subprojects {
+	if (project.name != 'share') {
+		task regenEclipse {
+			// Delete the eclipse classpath and project and then recreate it, without doing any of the slower bits.
+			dependsOn 'cleanEclipseProject'
+			dependsOn 'cleanEclipseClasspath'
+			dependsOn 'eclipseProject'
+			dependsOn 'eclipseClasspath'
+		}
 
-group = 'pokechu22.test.begradle'
-version = '0.2.0-SNAPSHOT'
-archivesBaseName = 'begradle'
-targetCompatibility = '1.8'
-sourceCompatibility = '1.8'
+		// Compiling
+		apply plugin: 'java'
+		// idea IDE
+		apply plugin: 'idea'
+		// eclipse IDE
+		apply plugin: 'eclipse'
+		// Needed to use content from maven repos
+		apply plugin: 'maven'
 
-repositories {
-	// Main maven repos
-	jcenter()
-	mavenCentral()
-	// Local repository (eg, own build of ForgeGradle)
-	// Below those repos so that source jars work (but above FG)
-	mavenLocal()
-	// Needed for ForgeGradle (among other things) 
-	maven {
-		name = "forge"
-		url = "http://files.minecraftforge.net/maven"
-	}
-}
+		group = 'pokechu22.test.begradle'
+		version = '0.2.0-SNAPSHOT'
+		archivesBaseName = 'begradle'
+		targetCompatibility = '1.8'
+		sourceCompatibility = '1.8'
 
-configurations {
-	shade
-	compileOnly.extendsFrom shade
-}
+		repositories {
+			// Main maven repos
+			jcenter()
+			mavenCentral()
+			// Local repository (eg, own build of ForgeGradle)
+			// Below those repos so that source jars work (but above FG)
+			mavenLocal()
+			// Needed for ForgeGradle (among other things) 
+			maven {
+				name = "forge"
+				url = "http://files.minecraftforge.net/maven"
+			}
+		}
 
-dependencies {
-	compile gradleApi()
+		configurations {
+			shade
+			compileOnly.extendsFrom shade
+		}
 
-	// Apache commons-io
-	compile 'commons-io:commons-io:2.5'
-	// java-diff-utils: https://github.com/dnaumenko/java-diff-utils
-	compile 'com.googlecode.java-diff-utils:diffutils:1.3.0'
-	// We need *this* version for FG
-	compile 'com.google.guava:guava:18.0'
+		sourceSets {
+			main.compileClasspath += configurations.shade;
+			main.runtimeClasspath += configurations.shade;
+			test.compileClasspath += configurations.shade;
+			test.runtimeClasspath += configurations.shade;
+		}
 
-	testCompile 'junit:junit:4.12'
-	testCompile 'org.hamcrest:hamcrest-library:1.3'
+		sourceSets {
+			main {
+				java {
+					srcDir "src/main/java"
+					srcDir project(':share').file("src/main/java")
+				}
+				resources {
+					srcDir project(':share').file("src/main/resources")
+				}
+			}
+			test {
+				java {
+					srcDir project(':share').file("src/test/java")
+				}
+				resources {
+					srcDir project(':share').file("src/test/resources")
+				}
+			}
+		}
 
-	compile 'net.minecraftforge.srg2source:Srg2Source:4.0-SNAPSHOT'
+		compileJava {
+			options.deprecation = true
+		}
 
-	// Put FG below so that dependencies are prioritized (source attachment)
-	compile 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
-}
+		jar {
 
-sourceSets {
-	main.compileClasspath += configurations.shade;
-	main.runtimeClasspath += configurations.shade;
-	test.compileClasspath += configurations.shade;
-	test.runtimeClasspath += configurations.shade;
-}
+			configurations.shade.each { dep ->
+				from(project.zipTree(dep)){
+					exclude 'META-INF', 'META-INF/**'
+				}
+			}
 
-compileJava {
-	options.deprecation = true
-}
+			manifest {
+				attributes 'version': project.version
+				attributes 'javaCompliance': project.targetCompatibility
+				attributes 'group': project.group
+				attributes 'Implementation-Version': project.version + getGitHash()
+			}
+		}
 
-jar {
+		javadoc {
+			classpath += configurations.compileOnly
 
-	configurations.shade.each { dep ->
-		from(project.zipTree(dep)){
-			exclude 'META-INF', 'META-INF/**'
+			// Linked javadoc urls
+			options.addStringOption 'link', 'https://gradle.org/docs/current/javadoc/'
+		}
+
+		task javadocJar(type: Jar, dependsOn: javadoc) {
+			from javadoc
+			classifier = "javadoc"
+		}
+
+		artifacts {
+			archives jar
+			archives javadocJar
 		}
 	}
-
-	manifest {
-		attributes 'version': project.version
-		attributes 'javaCompliance': project.targetCompatibility
-		attributes 'group': project.group
-		attributes 'Implementation-Version': project.version + getGitHash()
-	}
-}
-
-javadoc {
-	classpath += configurations.compileOnly
-
-	// Linked javadoc urls
-	options.addStringOption 'link', 'https://gradle.org/docs/current/javadoc/'
-}
-
-task javadocJar(type: Jar, dependsOn: javadoc) {
-	from javadoc
-	classifier = "javadoc"
-}
-
-artifacts {
-	archives jar
-	archives javadocJar
 }
 
 def getGitHash() {
