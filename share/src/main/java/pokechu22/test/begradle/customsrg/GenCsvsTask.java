@@ -6,15 +6,13 @@ import java.nio.charset.Charset;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-import net.minecraftforge.gradle.common.Constants;
-import net.minecraftforge.gradle.util.delayed.DelayedFile;
-
 import org.gradle.api.DefaultTask;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 
+import au.com.bytecode.opencsv.CSVParser;
 import au.com.bytecode.opencsv.CSVReader;
 import au.com.bytecode.opencsv.CSVWriter;
 
@@ -22,10 +20,10 @@ import com.google.common.collect.Maps;
 import com.google.common.io.Files;
 
 public class GenCsvsTask extends DefaultTask {
-	private DelayedFile inMethodsCSV;
-	private DelayedFile outMethodsCSV;
-	private DelayedFile inFieldsCSV;
-	private DelayedFile outFieldsCSV;
+	private Object inMethodsCSV;
+	private Object outMethodsCSV;
+	private Object inFieldsCSV;
+	private Object outFieldsCSV;
 
 	private ExtraSrgContainer extraSrgContainer;
 
@@ -35,13 +33,13 @@ public class GenCsvsTask extends DefaultTask {
 	 */
 	@InputFile
 	public File getInMethodsCSV() {
-		return inMethodsCSV.call();
+		return getProject().file(inMethodsCSV);
 	}
 	/**
 	 * Sets the original method CSV.
 	 * @param inMethodsCSV The original method CSV
 	 */
-	public void setInMethodsCSV(DelayedFile inMethodsCSV) {
+	public void setInMethodsCSV(Object inMethodsCSV) {
 		this.inMethodsCSV = inMethodsCSV;
 	}
 
@@ -51,13 +49,13 @@ public class GenCsvsTask extends DefaultTask {
 	 */
 	@OutputFile
 	public File getOutMethodsCSV() {
-		return outMethodsCSV.call();
+		return getProject().file(outMethodsCSV);
 	}
 	/**
 	 * Sets the new method CSV.
 	 * @param outMethodsCSV The new method CSV
 	 */
-	public void setOutMethodsCSV(DelayedFile outMethodsCSV) {
+	public void setOutMethodsCSV(Object outMethodsCSV) {
 		this.outMethodsCSV = outMethodsCSV;
 	}
 
@@ -67,13 +65,13 @@ public class GenCsvsTask extends DefaultTask {
 	 */
 	@InputFile
 	public File getInFieldsCSV() {
-		return inFieldsCSV.call();
+		return getProject().file(inFieldsCSV);
 	}
 	/**
 	 * Sets the original field CSV.
 	 * @param inFieldsCSV The original field CSV
 	 */
-	public void setInFieldsCSV(DelayedFile inFieldsCSV) {
+	public void setInFieldsCSV(Object inFieldsCSV) {
 		this.inFieldsCSV = inFieldsCSV;
 	}
 
@@ -83,13 +81,13 @@ public class GenCsvsTask extends DefaultTask {
 	 */
 	@OutputFile
 	public File getOutFieldsCSV() {
-		return outFieldsCSV.call();
+		return getProject().file(outFieldsCSV);
 	}
 	/**
 	 * Sets the new field CSV.
 	 * @param outFieldsCSV The new field CSV
 	 */
-	public void setOutFieldsCSV(DelayedFile outFieldsCSV) {
+	public void setOutFieldsCSV(Object outFieldsCSV) {
 		this.outFieldsCSV = outFieldsCSV;
 	}
 
@@ -141,6 +139,10 @@ public class GenCsvsTask extends DefaultTask {
 		write(getOutFieldsCSV(), fields);
 	}
 
+	private CSVReader getCSVReader(File file) throws IOException {
+		return new CSVReader(Files.newReader(file, Charset.defaultCharset()), CSVParser.DEFAULT_SEPARATOR, CSVParser.DEFAULT_QUOTE_CHARACTER, CSVParser.NULL_CHARACTER, 1, false);
+	}
+
 	/**
 	 * Processes the given CSV file, adding data from the given map.
 	 *
@@ -152,7 +154,7 @@ public class GenCsvsTask extends DefaultTask {
 	 * @throws IOException when an IO error occurs
 	 */
 	private void process(File file, LinkedHashMap<String, String[]> map) throws IOException {
-		try (CSVReader csvReader = Constants.getReader(file)) {
+		try (CSVReader csvReader = getCSVReader(file)) {
 			for (String[] data : csvReader.readAll()) {
 				map.put(data[0], data);
 			}

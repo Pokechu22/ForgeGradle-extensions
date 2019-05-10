@@ -16,8 +16,6 @@ import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskInputs;
 import org.gradle.language.jvm.tasks.ProcessResources;
 
-import net.minecraftforge.gradle.common.Constants;
-
 /**
  * Adds a property, <code>ext.renameLangFiles</code>, that controls whether
  * language files should be renamed to use the 1.10 convention (en_US.lang)
@@ -25,9 +23,14 @@ import net.minecraftforge.gradle.common.Constants;
  * already using the 1.11 convention.
  */
 public class LangRenamerPlugin implements Plugin<Project> {
+	/**
+	 * The extension to work with.
+	 */
+	private static final String EXTENSION_NAME = "minecraft";
+
 	@Override
 	public void apply(Project project) {
-		ExtensionAware extension = (ExtensionAware) project.getExtensions().getByName(Constants.EXT_NAME_MC);
+		ExtensionAware extension = (ExtensionAware) project.getExtensions().getByName(EXTENSION_NAME);
 		ExtraPropertiesExtension ext = extension.getExtensions().getExtraProperties();
 		ext.set("capitalizeLangFiles", false);
 		ext.set("jsonLangFiles", false);
@@ -52,7 +55,7 @@ public class LangRenamerPlugin implements Plugin<Project> {
 	private void afterEvaluate(Project project) {
 		TaskContainer tasks = project.getTasks();
 		ProcessResources resourcesTask = (ProcessResources) tasks.getByName("processResources");
-		ExtensionAware extension = (ExtensionAware) project.getExtensions().getByName(Constants.EXT_NAME_MC);
+		ExtensionAware extension = (ExtensionAware) project.getExtensions().getByName(EXTENSION_NAME);
 		ExtraPropertiesExtension ext = extension.getExtensions().getExtraProperties();
 		boolean capitalizeLangFiles = (boolean) ext.get("capitalizeLangFiles");
 		boolean jsonLangFiles = (boolean) ext.get("jsonLangFiles");
