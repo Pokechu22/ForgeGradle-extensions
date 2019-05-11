@@ -85,9 +85,6 @@ subprojects {
 				java {
 					srcDir project(':share').file("src/test/java")
 				}
-				resources {
-					srcDir project(':share').file("src/test/resources")
-				}
 			}
 		}
 

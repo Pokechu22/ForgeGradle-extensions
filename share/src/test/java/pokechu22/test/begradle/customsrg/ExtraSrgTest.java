@@ -2,7 +2,7 @@ package pokechu22.test.begradle.customsrg;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
-import static pokechu22.test.begradle.customsrg.ExtraSRGTest.IsMapWithSize.*;
+import static pokechu22.test.begradle.customsrg.ExtraSrgTest.IsMapWithSize.*;
 
 import java.util.Map;
 
@@ -14,16 +14,16 @@ import net.minecraftforge.srg2source.rangeapplier.MethodData;
 import net.minecraftforge.srg2source.rangeapplier.SrgContainer;
 
 /**
- * Tests the behavior of readExtraSrgs.
+ * Tests the behavior of {@link ExtraSrgUtil}.
  */
-public class ExtraSRGTest {
+public class ExtraSrgTest {
 
 	@Test
 	public void testEmptyExtra() {
 		SrgContainer extra = new SrgContainer();
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
-		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		SrgContainer outSrg = ExtraSrgUtil.remapSrg(main, extra);
 		assertThat(outSrg.classMap, maps("a", "foo/Example"));
 	}
 
@@ -33,7 +33,7 @@ public class ExtraSRGTest {
 		extra.classMap.put("foo/Example", "foo/Thing");
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
-		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		SrgContainer outSrg = ExtraSrgUtil.remapSrg(main, extra);
 		assertThat(outSrg.classMap, maps("a", "foo/Thing"));
 	}
 
@@ -46,7 +46,7 @@ public class ExtraSRGTest {
 		main.classMap.put("a", "foo/Example");
 		main.methodMap.put(new MethodData("a/b", "()V"),
 				new MethodData("foo/Example/doThing", "()V"));
-		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		SrgContainer outSrg = ExtraSrgUtil.remapSrg(main, extra);
 		assertThat(outSrg.methodMap, maps(new MethodData("a/b", "()V"),
 				new MethodData("foo/Thing/doThing", "()V")));
 	}
@@ -61,7 +61,7 @@ public class ExtraSRGTest {
 		main.classMap.put("b", "foo/SomeObj");
 		main.methodMap.put(new MethodData("b/c", "()La;"),
 				new MethodData("foo/SomeObj/get", "()Lfoo/Example;"));
-		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		SrgContainer outSrg = ExtraSrgUtil.remapSrg(main, extra);
 		assertThat(outSrg.methodMap, maps(new MethodData("b/c", "()La;"),
 				new MethodData("foo/SomeObj/get", "()Lfoo/Thing;")));
 	}
@@ -76,7 +76,7 @@ public class ExtraSRGTest {
 		main.classMap.put("b", "foo/SomeObj");
 		main.methodMap.put(new MethodData("b/d", "(La;)V"),
 				new MethodData("foo/SomeObj/set", "(Lfoo/Example;)V"));
-		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		SrgContainer outSrg = ExtraSrgUtil.remapSrg(main, extra);
 		assertThat(outSrg.methodMap, maps(new MethodData("b/d", "(La;)V"),
 				new MethodData("foo/SomeObj/set", "(Lfoo/Thing;)V")));
 	}
@@ -92,7 +92,7 @@ public class ExtraSRGTest {
 		SrgContainer main = new SrgContainer();
 		main.classMap.put("a", "foo/Example");
 		main.fieldMap.put("a/a", "foo/Example/data");
-		SrgContainer outSrg = GenSrgsWithCustomSupportTask.remapSrg(main, extra);
+		SrgContainer outSrg = ExtraSrgUtil.remapSrg(main, extra);
 		assertThat(outSrg.fieldMap, maps("a/a", "foo/Thing/data"));
 	}
 

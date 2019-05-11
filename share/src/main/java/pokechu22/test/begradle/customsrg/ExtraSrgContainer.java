@@ -17,10 +17,19 @@ import org.gradle.util.ConfigureUtil;
  * A collection of additional SRG files (and other data).
  */
 public final class ExtraSrgContainer {
-	private final CustomSrgInjectPlugin plugin;
+	/**
+	 * Called as soon as a value is set.  A rather silly thing needed for FG 2
+	 * (which needs this called as soon as possible; it can't wait until after
+	 * configuration has finished as dependencies will ask for it before then)
+	 */
+	private final Runnable forceLocalCache;
 
-	ExtraSrgContainer(CustomSrgInjectPlugin plugin) {
-		this.plugin = plugin; 
+	ExtraSrgContainer() {
+		this(() -> {});
+	}
+
+	ExtraSrgContainer(Runnable forceLocalCache) {
+		this.forceLocalCache = forceLocalCache;
 	}
 
 	private final List<File> srgs = new LinkedList<>();
@@ -119,8 +128,7 @@ public final class ExtraSrgContainer {
 	 */
 	public void addSrg(File file) {
 		this.srgs.add(file);
-		// Ugly, but needed so that it's enabled _before_ the dependencies ask for it.
-		plugin.forceLocalCache();
+		forceLocalCache.run();
 	}
 
 	/**
@@ -129,8 +137,7 @@ public final class ExtraSrgContainer {
 	 */
 	public void addMethods(File file) {
 		this.methods.add(file);
-		// Ugly, but needed so that it's enabled _before_ the dependencies ask for it.
-		plugin.forceLocalCache();
+		forceLocalCache.run();
 	}
 
 	/**
@@ -139,8 +146,7 @@ public final class ExtraSrgContainer {
 	 */
 	public void addFields(File file) {
 		this.fields.add(file);
-		// Ugly, but needed so that it's enabled _before_ the dependencies ask for it.
-		plugin.forceLocalCache();
+		forceLocalCache.run();
 	}
 
 	/**
@@ -150,8 +156,7 @@ public final class ExtraSrgContainer {
 	 */
 	public void addPatch(String inFile, File patch) {
 		this.patches.put(inFile, patch);
-		// Ugly, but needed so that it's enabled _before_ the dependencies ask for it.
-		plugin.forceLocalCache();
+		forceLocalCache.run();
 	}
 
 	/**

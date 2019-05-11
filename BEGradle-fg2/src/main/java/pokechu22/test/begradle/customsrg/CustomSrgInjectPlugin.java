@@ -45,7 +45,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 	/**
 	 * Contains the list of additional SRGs to add.
 	 */
-	protected ExtraSrgContainer extraSrgContainer = new ExtraSrgContainer(this);
+	protected ExtraSrgContainer extraSrgContainer = new ExtraSrgContainer(this::forceLocalCache);
 	/**
 	 * Has {@link #forceLocalCache()} been called?
 	 */
