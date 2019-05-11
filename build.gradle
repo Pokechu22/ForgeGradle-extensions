@@ -58,18 +58,6 @@ subprojects {
 			}
 		}
 
-		configurations {
-			shade
-			compileOnly.extendsFrom shade
-		}
-
-		sourceSets {
-			main.compileClasspath += configurations.shade;
-			main.runtimeClasspath += configurations.shade;
-			test.compileClasspath += configurations.shade;
-			test.runtimeClasspath += configurations.shade;
-		}
-
 		sourceSets {
 			main {
 				java {
@@ -93,13 +81,6 @@ subprojects {
 		}
 
 		jar {
-
-			configurations.shade.each { dep ->
-				from(project.zipTree(dep)){
-					exclude 'META-INF', 'META-INF/**'
-				}
-			}
-
 			manifest {
 				attributes 'version': project.version
 				attributes 'javaCompliance': project.targetCompatibility
