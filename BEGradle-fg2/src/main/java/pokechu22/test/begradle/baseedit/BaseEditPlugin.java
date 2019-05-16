@@ -18,7 +18,6 @@ import net.minecraftforge.gradle.user.UserConstants;
 import net.minecraftforge.gradle.user.UserVanillaBasePlugin;
 import net.minecraftforge.gradle.util.json.version.Version;
 
-import org.gradle.api.Action;
 import org.gradle.api.Task;
 import org.gradle.api.UncheckedIOException;
 import org.gradle.api.file.CopySpec;
@@ -73,12 +72,7 @@ public class BaseEditPlugin extends
 
 		// Loosely based on AntlrPlugin.  Add new options to each sourceset.
 		project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
-				.all(new Action<SourceSet>() {
-					@Override
-					public void execute(SourceSet sourceSet) {
-						injectSourceSet(sourceSet);
-					}
-				});
+				.all(this::injectSourceSet);
 	}
 
 	/**
