@@ -3,7 +3,9 @@ package pokechu22.test.begradle.baseedit;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 import javax.annotation.Nonnull;
@@ -90,7 +92,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 				throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
 			}
 			ExternalModuleDependency mcDep = (ExternalModuleDependency)dep;
-			System.out.println("Cur dep: " + mcDep);
+			System.out.println("Cur dep: " + mcDep + " (" + System.identityHashCode(mcDep) + ")");
 			System.out.println(mcDep.getArtifacts());
 			mcDep.getArtifacts().forEach(System.out::println);
 			ExternalModuleDependency sourceDep = mcDep.copy();
@@ -101,17 +103,32 @@ public class BaseEditPlugin extends UserDevPlugin {
 				art.setExtension("jar");
 				System.out.println("New: " + art);
 			});
-			System.out.println("New dep: " + sourceDep);
+			System.out.println("New dep: " + sourceDep + " (" + System.identityHashCode(sourceDep) + ")");
 			System.out.println("Art: " + sourceDep.getArtifacts());
 			sourceDep.getArtifacts().forEach(System.out::println);
-			/*Dependency mcDep = deps.get(0);
-			String depStr = mcDep.getGroup() + ":" + mcDep.getName() + ":" + mcDep.getVersion();
-			String sourceDepStr = depStr + ":sources";
-			Dependency sourceDep = project.getDependencies().create(sourceDepStr);*/
 			minecraft.getDependencies().add(sourceDep);
-			System.out.println("Files: " + minecraft.getFiles());
-			System.out.println("-------------");
-			mcSourcesJar = minecraft.getSingleFile();
+			// Performs a blocking file resolution here.
+			// This _might_ break things, but I think it's probably fine.
+			/*Set<File> resolvedFiles = minecraft.getResolvedConfiguration().getFiles((dep2) -> {
+				System.out.println(dep2 + " (" + System.identityHashCode(dep2) + ", " + sourceDep.contentEquals(dep2) + ", " + sourceDep.equals(dep2) + ", " + (sourceDep == dep2) + ")");
+				return sourceDep.contentEquals(dep2);
+			});
+			if (resolvedFiles.size() != 1) {
+				throw new RuntimeException("Expected only 1 resolved file to match: " + resolvedFiles);
+			}
+			mcSourcesJar = resolvedFiles.iterator().next();*/
+			Set<File> files = minecraft.getResolvedConfiguration().getFiles();
+			String expectedName = sourceDep.getName() + "-" + sourceDep.getVersion() + "-sources.jar";
+			Set<File> matching = new HashSet<>();
+			for (File file : files) {
+				if (file.getName().equals(expectedName)) {
+					matching.add(file);
+				}
+			}
+			if (matching.size() != 1) {
+				throw new RuntimeException("Expected only 1 resolved file to match be named \"" + expectedName + "\": " + matching + " (from " + files + ")");
+			}
+			mcSourcesJar = matching.iterator().next();
 		});
 	}
 
