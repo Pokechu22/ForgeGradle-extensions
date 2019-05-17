@@ -2,12 +2,16 @@ package pokechu22.test.begradle.baseedit;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 
 import javax.annotation.Nonnull;
 
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.Dependency;
+import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPluginConvention;
@@ -20,16 +24,29 @@ import org.gradle.plugins.ide.eclipse.model.ClasspathEntry;
 import org.gradle.plugins.ide.eclipse.model.EclipseModel;
 import org.gradle.plugins.ide.eclipse.model.SourceFolder;
 
+import com.google.common.collect.ImmutableMap;
+
 import net.minecraftforge.gradle.userdev.UserDevPlugin;
 
 public class BaseEditPlugin extends UserDevPlugin {
+	// Null until apply
 	private Project project;
+	// Null until afterEvaluate
+	private File mcSourcesJar;
 
 	@Override
 	public void apply(@Nonnull Project project) {
+		if (this.project != null) {
+			// If it is possible for this to happen, then this code is broken
+			throw new AssertionError("Expected plugin to only be applied once!");
+		}
+		this.project = project;
+
+		project.apply(ImmutableMap.of("plugin", "eclipse"));
+		project.apply(ImmutableMap.of("plugin", "idea"));
+
 		configureEclipse();
 		super.apply(project);
-		this.project = project;
 
 		String baseName = "mod-"
 				+ this.project.property("archivesBaseName").toString()
@@ -55,12 +72,47 @@ public class BaseEditPlugin extends UserDevPlugin {
 			throw new RuntimeException("Failed to disable META-INF generation", ex);
 		}
 
-		final Jar sourceJar = (Jar) tasks.getByName("sourceJar");
-		sourceJar.setBaseName(baseName);
-
 		// Loosely based on AntlrPlugin.  Add new options to each sourceset.
 		project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
 				.all(this::injectSourceSet);
+
+		Configuration minecraft = project.getConfigurations().getByName("minecraft");
+
+		project.afterEvaluate(p -> {
+			// Prepare for actually finding the sources jar
+			List<Dependency> deps = new ArrayList<>(minecraft.getDependencies());
+			System.out.println("Deps: " + deps);
+			if (deps.size() != 1) {
+				throw new RuntimeException("Expected only one minecraft dependency, but there were " + deps);
+			}
+			Dependency dep = deps.get(0);
+			if (!(dep instanceof ExternalModuleDependency)) {
+				throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
+			}
+			ExternalModuleDependency mcDep = (ExternalModuleDependency)dep;
+			System.out.println("Cur dep: " + mcDep);
+			System.out.println(mcDep.getArtifacts());
+			mcDep.getArtifacts().forEach(System.out::println);
+			ExternalModuleDependency sourceDep = mcDep.copy();
+			sourceDep.artifact(art -> {
+				art.setName("client");
+				art.setType("maven");
+				art.setClassifier("sources");
+				art.setExtension("jar");
+				System.out.println("New: " + art);
+			});
+			System.out.println("New dep: " + sourceDep);
+			System.out.println("Art: " + sourceDep.getArtifacts());
+			sourceDep.getArtifacts().forEach(System.out::println);
+			/*Dependency mcDep = deps.get(0);
+			String depStr = mcDep.getGroup() + ":" + mcDep.getName() + ":" + mcDep.getVersion();
+			String sourceDepStr = depStr + ":sources";
+			Dependency sourceDep = project.getDependencies().create(sourceDepStr);*/
+			minecraft.getDependencies().add(sourceDep);
+			System.out.println("Files: " + minecraft.getFiles());
+			System.out.println("-------------");
+			mcSourcesJar = minecraft.getSingleFile();
+		});
 	}
 
 	/**
@@ -79,8 +131,6 @@ public class BaseEditPlugin extends UserDevPlugin {
 		// Add the patched source to the all source list
 		sourceSet.getAllSource().srcDir(
 				baseDirectoryDelegate.getPatchedSourceCallable());
-
-		Configuration minecraft = project.getConfigurations().getAt("minecraft");
 
 		// Create the new tasks
 		String processTaskName = sourceSet.getTaskName("process", "BasePatches");
@@ -106,35 +156,17 @@ public class BaseEditPlugin extends UserDevPlugin {
 		// need to specify them)
 		processTask.setPatches(baseDirectoryDelegate.getPatches());
 		processTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
-		processTask.setOrigJar(new Callable<File>() {
-			@Override
-			public File call() throws Exception {
-				System.out.println(minecraft.getFiles());
-				return minecraft.getSingleFile();
-			}
-		});
+		processTask.setOrigJar((Callable<File>)this::getMcSourcesJar);
 		processTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
 
 		genTask.setPatches(baseDirectoryDelegate.getPatches());
 		genTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
-		genTask.setOrigJar(new Callable<File>() {
-			@Override
-			public File call() throws Exception {
-				System.out.println(minecraft.getFiles());
-				return minecraft.getSingleFile();
-			}
-		});
+		genTask.setOrigJar((Callable<File>)this::getMcSourcesJar);
 		genTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
 
 		applyTask.setPatches(baseDirectoryDelegate.getPatches());
 		applyTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
-		applyTask.setOrigJar(new Callable<File>() {
-			@Override
-			public File call() throws Exception {
-				System.out.println(minecraft.getFiles());
-				return minecraft.getSingleFile();
-			}
-		});
+		applyTask.setOrigJar((Callable<File>)this::getMcSourcesJar);
 		applyTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
 
 		// Order the tasks
@@ -144,6 +176,13 @@ public class BaseEditPlugin extends UserDevPlugin {
 		// Tell the java plugin to compile the patched source
 		sourceSet.getJava().srcDir(
 				baseDirectoryDelegate.getPatchedSourceCallable());
+	}
+
+	private File getMcSourcesJar() throws IllegalStateException {
+		if (mcSourcesJar == null) {
+			throw new IllegalStateException("mcSourcesJar is still null -- getMcSourcesJar actually called before afterEvaluate?");
+		}
+		return mcSourcesJar;
 	}
 
 	protected void configureEclipse() {
