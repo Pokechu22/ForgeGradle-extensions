@@ -92,33 +92,23 @@ public class BaseEditPlugin extends UserDevPlugin {
 				throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
 			}
 			ExternalModuleDependency mcDep = (ExternalModuleDependency)dep;
-			System.out.println("Cur dep: " + mcDep + " (" + System.identityHashCode(mcDep) + ")");
-			System.out.println(mcDep.getArtifacts());
-			mcDep.getArtifacts().forEach(System.out::println);
-			ExternalModuleDependency sourceDep = mcDep.copy();
-			sourceDep.artifact(art -> {
+			// Don't clear the existing one
+			mcDep.artifact(art -> {
+				art.setName("client");
+				art.setType("maven");
+			});
+			// But we also want sources
+			mcDep.artifact(art -> {
 				art.setName("client");
 				art.setType("maven");
 				art.setClassifier("sources");
-				art.setExtension("jar");
-				System.out.println("New: " + art);
 			});
-			System.out.println("New dep: " + sourceDep + " (" + System.identityHashCode(sourceDep) + ")");
-			System.out.println("Art: " + sourceDep.getArtifacts());
-			sourceDep.getArtifacts().forEach(System.out::println);
-			minecraft.getDependencies().add(sourceDep);
-			// Performs a blocking file resolution here.
-			// This _might_ break things, but I think it's probably fine.
-			/*Set<File> resolvedFiles = minecraft.getResolvedConfiguration().getFiles((dep2) -> {
-				System.out.println(dep2 + " (" + System.identityHashCode(dep2) + ", " + sourceDep.contentEquals(dep2) + ", " + sourceDep.equals(dep2) + ", " + (sourceDep == dep2) + ")");
-				return sourceDep.contentEquals(dep2);
-			});
-			if (resolvedFiles.size() != 1) {
-				throw new RuntimeException("Expected only 1 resolved file to match: " + resolvedFiles);
-			}
-			mcSourcesJar = resolvedFiles.iterator().next();*/
+			// We also want this for its dependencies (which don't show up for some reason)
+			// (Unfortunately this doesn't work; the result seems to either be that it's ignored, or that it breaks resolution of the actual one)
+			project.getDependencies().add("runtimeClasspath", mcDep.getGroup() + ":" + mcDep.getName() + ":" + mcDep.getVersion() + ":extra");
+
 			Set<File> files = minecraft.getResolvedConfiguration().getFiles();
-			String expectedName = sourceDep.getName() + "-" + sourceDep.getVersion() + "-sources.jar";
+			String expectedName = mcDep.getName() + "-" + mcDep.getVersion() + "-sources.jar";
 			Set<File> matching = new HashSet<>();
 			for (File file : files) {
 				if (file.getName().equals(expectedName)) {
