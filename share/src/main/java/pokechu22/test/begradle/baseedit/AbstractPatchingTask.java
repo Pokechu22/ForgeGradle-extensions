@@ -12,12 +12,11 @@ import java.util.jar.JarFile;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.InvalidUserDataException;
-import org.gradle.api.Task;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFile;
+import org.gradle.api.tasks.TaskAction;
 
 import difflib.DiffUtils;
 import difflib.Patch;
@@ -35,45 +34,40 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 	private Object origJar;
 	private Callable<List<String>> baseClasses;
 
-	protected AbstractPatchingTask() {
-		this.doFirst(new Action<Task>() {
-			@Override
-			public void execute(Task t) {
-				// Validate all of the path names
-				AbstractPatchingTask task = (AbstractPatchingTask) t;
-				File origJar = getOrigJar();
-				if (!origJar.exists()) {
-					throw new UncheckedIOException(new FileNotFoundException(
-							"Cannot find unmodified Minecraft source jar - "
-									+ "tried " + origJar));
+	@TaskAction
+	public void validate() {
+		// Validate all of the path names
+		File origJar = getOrigJar();
+		if (!origJar.exists()) {
+			throw new UncheckedIOException(new FileNotFoundException(
+					"Cannot find unmodified Minecraft source jar - "
+							+ "tried " + origJar));
+		}
+
+		try (JarFile jar = new JarFile(origJar)) {
+			List<String> classes = this.getBaseClasses();
+			for (String className : classes) {
+				if (className.contains("\\") || className.contains("/")) {
+					// Enforce java-style names, mainly for
+					// convenience (and to get rid of path char
+					// issues)
+					throw new InvalidUserDataException(
+							"Class names should be java-style names"
+							+ "(eg com.example.Test), not paths "
+							+ "(eg com/example/Test.java)!  "
+							+ "(Got: " + className + ")");
 				}
 
-				try (JarFile jar = new JarFile(origJar)) {
-					List<String> classes = task.getBaseClasses();
-					for (String className : classes) {
-						if (className.contains("\\") || className.contains("/")) {
-							// Enforce java-style names, mainly for
-							// convenience (and to get rid of path char
-							// issues)
-							throw new InvalidUserDataException(
-									"Class names should be java-style names"
-									+ "(eg com.example.Test), not paths "
-									+ "(eg com/example/Test.java)!  "
-									+ "(Got: " + className + ")");
-						}
-
-						JarEntry entry = getJarEntry(className, jar);
-						if (entry == null) {
-							throw new InvalidUserDataException(
-									"There is no class named '" + className
-									+ "' in the source jar (" + origJar + ")!");
-						}
-					}
-				} catch (IOException e) {
-					throw new UncheckedIOException(e);
+				JarEntry entry = getJarEntry(className, jar, true);
+				if (entry == null) {
+					throw new InvalidUserDataException(
+							"There is no class named '" + className
+							+ "' in the source jar (" + origJar + ")!");
 				}
 			}
-		});
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 
 	/**
@@ -194,11 +188,20 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 	 *            The user-inputed name of the class
 	 * @param jar
 	 *            The jar to look in
+	 * @param allowMissing
+	 *            Allow returning null if the class does not exist.
 	 * @return The JarEntry for that class.
 	 */
-	protected JarEntry getJarEntry(String className, JarFile jar) {
+	protected JarEntry getJarEntry(String className, JarFile jar, boolean allowMissing) {
 		String path = className.replace('.', '/') + ".java";
-		return jar.getJarEntry(path);
+		JarEntry entry = jar.getJarEntry(path);
+		if (!allowMissing) {
+			if (entry == null) {
+				// Should not happen because this is validated beforehand
+				throw new RuntimeException("Unexpected null jar entry for " + className + " (-> " + path + ") in " + jar + " -- this should not happen!");
+			}
+		}
+		return entry;
 	}
 
 	/**
@@ -217,7 +220,7 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 		List<String> newContent;
 
 		List<String> origContent;
-		try (InputStream input = jar.getInputStream(getJarEntry(className, jar))) {
+		try (InputStream input = jar.getInputStream(getJarEntry(className, jar, false))) {
 			origContent = IOUtils.readLines(input, "UTF-8");
 		}
 
@@ -265,7 +268,7 @@ public abstract class AbstractPatchingTask extends DefaultTask {
 				className, sourceFile, patchFile);
 
 		List<String> origContent;
-		try (InputStream input = jar.getInputStream(getJarEntry(className, jar))) {
+		try (InputStream input = jar.getInputStream(getJarEntry(className, jar, false))) {
 			origContent = IOUtils.readLines(input, "UTF-8");
 		}
 

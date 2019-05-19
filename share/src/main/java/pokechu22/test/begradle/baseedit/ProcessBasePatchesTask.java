@@ -98,7 +98,7 @@ public class ProcessBasePatchesTask extends AbstractPatchingTask {
 						File sourceFile = getPatchedSource(className);
 						getLogger().lifecycle("Copying original {} to {} as no patch exists",
 								className, sourceFile);
-						try (InputStream input = jar.getInputStream(getJarEntry(className, jar))) {
+						try (InputStream input = jar.getInputStream(getJarEntry(className, jar, false))) {
 							FileUtils.writeLines(sourceFile, IOUtils.readLines(input, "UTF-8"));
 						}
 						genPatch(className, jar);
