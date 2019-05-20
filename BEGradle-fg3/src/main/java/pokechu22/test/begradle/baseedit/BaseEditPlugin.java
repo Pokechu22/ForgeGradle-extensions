@@ -3,7 +3,7 @@ package pokechu22.test.begradle.baseedit;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -14,19 +14,12 @@ import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ExternalModuleDependency;
-import org.gradle.api.artifacts.result.ArtifactResolutionResult;
-import org.gradle.api.artifacts.result.ArtifactResult;
-import org.gradle.api.artifacts.result.ComponentArtifactsResult;
-import org.gradle.api.artifacts.result.ComponentResult;
-import org.gradle.api.artifacts.result.ResolvedArtifactResult;
-import org.gradle.api.component.Component;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.jvm.tasks.Jar;
-import org.gradle.language.base.artifact.SourcesArtifact;
 import org.gradle.plugins.ide.api.XmlFileContentMerger;
 import org.gradle.plugins.ide.eclipse.model.Classpath;
 import org.gradle.plugins.ide.eclipse.model.ClasspathEntry;
@@ -114,39 +107,18 @@ public class BaseEditPlugin extends UserDevPlugin {
 			// (Unfortunately this doesn't work; the result seems to either be that it's ignored, or that it breaks resolution of the actual one)
 			project.getDependencies().add("runtimeClasspath", mcDep.getGroup() + ":" + mcDep.getName() + ":" + mcDep.getVersion() + ":extra");
 
-			minecraft.resolve();
-			System.out.println(minecraft.getIncoming().getResolutionResult());
-			System.out.println(minecraft.getIncoming().getResolutionResult().getAllDependencies());
-			System.out.println("Deps:");
-			minecraft.getIncoming().getResolutionResult().getAllDependencies().forEach(System.out::println);
-			System.out.println("----");
-			System.out.println(minecraft.getIncoming().getResolutionResult().getAllComponents());
-			System.out.println("Comps:");
-			minecraft.getIncoming().getResolutionResult().getAllComponents().forEach(System.out::println);
-			ArtifactResolutionResult sourcesResult = project.getDependencies()
-					.createArtifactResolutionQuery()
-					.forModule(dep.getGroup(), dep.getName(), dep.getVersion())
-					.withArtifacts(Component.class, Collections.singleton(SourcesArtifact.class))
-					.execute();
-			Set<ComponentArtifactsResult> resolved = sourcesResult.getResolvedComponents();
-			System.out.println("Resolved: " + resolved.size() + " " + resolved);
-			System.out.println("Comp: " + sourcesResult.getComponents());
-			Set<ComponentResult> unresolved = sourcesResult.getComponents();
-			System.out.println(unresolved.iterator().next().getId());
-			if (resolved.size() != 1) {
-				throw new RuntimeException("Expected only 1 resolved component, but got " + resolved);
+			Set<File> files = minecraft.getResolvedConfiguration().getFiles();
+			String expectedName = mcDep.getName() + "-" + mcDep.getVersion() + "-sources.jar";
+			Set<File> matching = new HashSet<>();
+			for (File file : files) {
+				if (file.getName().equals(expectedName)) {
+					matching.add(file);
+				}
 			}
-			ComponentArtifactsResult component = resolved.iterator().next();
-			Set<ArtifactResult> artifacts = component.getArtifacts(SourcesArtifact.class);
-			System.out.println("Artifacts: " + artifacts.size() + " " + artifacts);
-			if (artifacts.size() != 1) {
-				throw new RuntimeException("Expected only 1 resolved component, but got " + artifacts);
+			if (matching.size() != 1) {
+				throw new RuntimeException("Expected only 1 resolved file to match be named \"" + expectedName + "\": " + matching + " (from " + files + ")");
 			}
-			ArtifactResult artifact = artifacts.iterator().next();
-			System.out.println(artifact + " " + artifact.getClass() + " " + artifact.getId() + " " +artifact.getType());
-			ResolvedArtifactResult resolvedArtifact = (ResolvedArtifactResult)artifact;
-			System.out.println(resolvedArtifact + " " + resolvedArtifact.getFile() + " " +resolvedArtifact.getVariant());
-			mcSourcesJar = resolvedArtifact.getFile();
+			mcSourcesJar = matching.iterator().next();
 		});
 	}
 
