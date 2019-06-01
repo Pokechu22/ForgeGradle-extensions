@@ -92,7 +92,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 				throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
 			}
 			ExternalModuleDependency mcDep = (ExternalModuleDependency)dep;
-			// Don't clear the existing one
+			// Keep the actual jar
 			mcDep.artifact(art -> {
 				art.setName("client");
 				art.setType("maven");
@@ -105,7 +105,11 @@ public class BaseEditPlugin extends UserDevPlugin {
 			});
 			// We also want this for its dependencies (which don't show up for some reason)
 			// (Unfortunately this doesn't work; the result seems to either be that it's ignored, or that it breaks resolution of the actual one)
-			project.getDependencies().add("runtimeClasspath", mcDep.getGroup() + ":" + mcDep.getName() + ":" + mcDep.getVersion() + ":extra");
+			/*mcDep.artifact(art -> {
+				art.setName("client");
+				art.setType("maven");
+				art.setClassifier("extra");
+			});*/
 
 			Set<File> files = minecraft.getResolvedConfiguration().getFiles();
 			String expectedName = mcDep.getName() + "-" + mcDep.getVersion() + "-sources.jar";
