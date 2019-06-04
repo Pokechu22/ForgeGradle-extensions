@@ -10,6 +10,7 @@ import java.util.concurrent.Callable;
 
 import javax.annotation.Nonnull;
 
+import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
@@ -19,6 +20,7 @@ import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskContainer;
+import org.gradle.api.tasks.TaskProvider;
 import org.gradle.jvm.tasks.Jar;
 import org.gradle.plugins.ide.api.XmlFileContentMerger;
 import org.gradle.plugins.ide.eclipse.model.Classpath;
@@ -28,7 +30,12 @@ import org.gradle.plugins.ide.eclipse.model.SourceFolder;
 
 import com.google.common.collect.ImmutableMap;
 
+import net.minecraftforge.gradle.common.task.ExtractMCPData;
+import net.minecraftforge.gradle.common.util.MavenArtifactDownloader;
+import net.minecraftforge.gradle.patcher.task.TaskCreateSrg;
+import net.minecraftforge.gradle.userdev.UserDevExtension;
 import net.minecraftforge.gradle.userdev.UserDevPlugin;
+import net.minecraftforge.gradle.userdev.tasks.RenameJarInPlace;
 
 public class BaseEditPlugin extends UserDevPlugin {
 	// Null until apply
@@ -49,6 +56,8 @@ public class BaseEditPlugin extends UserDevPlugin {
 
 		configureEclipse();
 		super.apply(project);
+
+		UserDevExtension extension = project.getExtensions().getByType(UserDevExtension.class);
 
 		String baseName = "mod-"
 				+ this.project.property("archivesBaseName").toString()
@@ -75,14 +84,41 @@ public class BaseEditPlugin extends UserDevPlugin {
 		}
 
 		// Loosely based on AntlrPlugin.  Add new options to each sourceset.
-		project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
-				.all(this::injectSourceSet);
+		//project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
+		//		.all(this::injectSourceSet);
 
 		Configuration minecraft = project.getConfigurations().getByName("minecraft");
 
+		// TODO: In gradle 5.0, there's a named(String, Class<S>)
+		TaskProvider<ExtractMCPData> extractSrg = (TaskProvider)project.getTasks().named("extractSrg");
+		TaskProvider<TaskCreateSrg> createMcpToNotch = project.getTasks().register("createMcpToNotch", TaskCreateSrg.class);
+
+		createMcpToNotch.configure(task -> {
+			task.dependsOn(extractSrg);
+			task.toNotch();
+			task.setSrg(extractSrg.get().getOutput());
+			// per GenerateSRG.findNames
+			String mapping = extension.getMappings();
+			int idx = mapping.lastIndexOf('_');
+			if (idx == -1) {
+				throw new InvalidUserDataException("Bad mappings name " + mapping);
+			}
+			String channel = mapping.substring(0, idx);
+			String version = mapping.substring(idx + 1);
+			String desc = "de.oceanlabs.mcp:mcp_" + channel + ":" + version + "@zip";
+			File mappingsFile = MavenArtifactDownloader.manual(project, desc, false);
+			task.setMappings(mappingsFile);
+		});
+
 		project.afterEvaluate(p -> {
+			// Tell it to reobf using the mcp->notch srg
+			project.getTasks().withType(RenameJarInPlace.class, task -> {
+				task.dependsOn(createMcpToNotch);
+				task.setMappings(createMcpToNotch.get().getOutput());
+			});
+
 			// Prepare for actually finding the sources jar
-			List<Dependency> deps = new ArrayList<>(minecraft.getDependencies());
+			/*List<Dependency> deps = new ArrayList<>(minecraft.getDependencies());
 			System.out.println("Deps: " + deps);
 			if (deps.size() != 1) {
 				throw new RuntimeException("Expected only one minecraft dependency, but there were " + deps);
@@ -102,7 +138,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 				art.setName("client");
 				art.setType("maven");
 				art.setClassifier("sources");
-			});
+			})*/;
 			// We also want this for its dependencies (which don't show up for some reason)
 			// (Unfortunately this doesn't work; the result seems to either be that it's ignored, or that it breaks resolution of the actual one)
 			/*mcDep.artifact(art -> {
@@ -111,7 +147,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 				art.setClassifier("extra");
 			});*/
 
-			Set<File> files = minecraft.getResolvedConfiguration().getFiles();
+			/*Set<File> files = minecraft.getResolvedConfiguration().getFiles();
 			String expectedName = mcDep.getName() + "-" + mcDep.getVersion() + "-sources.jar";
 			Set<File> matching = new HashSet<>();
 			for (File file : files) {
@@ -122,7 +158,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 			if (matching.size() != 1) {
 				throw new RuntimeException("Expected only 1 resolved file to match be named \"" + expectedName + "\": " + matching + " (from " + files + ")");
 			}
-			mcSourcesJar = matching.iterator().next();
+			mcSourcesJar = matching.iterator().next();*/
 		});
 	}
 
