@@ -3,10 +3,7 @@ package pokechu22.test.begradle.baseedit;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Callable;
 
 import javax.annotation.Nonnull;
 
@@ -41,6 +38,8 @@ public class BaseEditPlugin extends UserDevPlugin {
 	// Null until apply
 	private Project project;
 	// Null until afterEvaluate
+	private String mcSourcesJarDesc;
+	// Null until getMcSourcesJar is called
 	private File mcSourcesJar;
 
 	@Override
@@ -84,8 +83,8 @@ public class BaseEditPlugin extends UserDevPlugin {
 		}
 
 		// Loosely based on AntlrPlugin.  Add new options to each sourceset.
-		//project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
-		//		.all(this::injectSourceSet);
+		project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets()
+				.all(this::injectSourceSet);
 
 		Configuration minecraft = project.getConfigurations().getByName("minecraft");
 
@@ -118,8 +117,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 			});
 
 			// Prepare for actually finding the sources jar
-			/*List<Dependency> deps = new ArrayList<>(minecraft.getDependencies());
-			System.out.println("Deps: " + deps);
+			List<Dependency> deps = new ArrayList<>(minecraft.getDependencies());
 			if (deps.size() != 1) {
 				throw new RuntimeException("Expected only one minecraft dependency, but there were " + deps);
 			}
@@ -127,38 +125,8 @@ public class BaseEditPlugin extends UserDevPlugin {
 			if (!(dep instanceof ExternalModuleDependency)) {
 				throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
 			}
-			ExternalModuleDependency mcDep = (ExternalModuleDependency)dep;
-			// Keep the actual jar
-			mcDep.artifact(art -> {
-				art.setName("client");
-				art.setType("maven");
-			});
-			// But we also want sources
-			mcDep.artifact(art -> {
-				art.setName("client");
-				art.setType("maven");
-				art.setClassifier("sources");
-			})*/;
-			// We also want this for its dependencies (which don't show up for some reason)
-			// (Unfortunately this doesn't work; the result seems to either be that it's ignored, or that it breaks resolution of the actual one)
-			/*mcDep.artifact(art -> {
-				art.setName("client");
-				art.setType("maven");
-				art.setClassifier("extra");
-			});*/
 
-			/*Set<File> files = minecraft.getResolvedConfiguration().getFiles();
-			String expectedName = mcDep.getName() + "-" + mcDep.getVersion() + "-sources.jar";
-			Set<File> matching = new HashSet<>();
-			for (File file : files) {
-				if (file.getName().equals(expectedName)) {
-					matching.add(file);
-				}
-			}
-			if (matching.size() != 1) {
-				throw new RuntimeException("Expected only 1 resolved file to match be named \"" + expectedName + "\": " + matching + " (from " + files + ")");
-			}
-			mcSourcesJar = matching.iterator().next();*/
+			mcSourcesJarDesc = dep.getGroup() + ":" + dep.getName() + ":" + dep.getVersion() + ":sources";
 		});
 	}
 
@@ -184,40 +152,50 @@ public class BaseEditPlugin extends UserDevPlugin {
 		String genTaskName = sourceSet.getTaskName("generate", "BasePatches");
 		String applyTaskName = sourceSet.getTaskName("apply", "BasePatches");
 
-		ProcessBasePatchesTask processTask = tasks.create(
+		TaskProvider<ProcessBasePatchesTask> processTaskProvider = tasks.register(
 				processTaskName, ProcessBasePatchesTask.class);
-		processTask.setDescription("Processes all of the " + sourceSet.getName()
-				+ " base patches, applying and generating them as needed.");
 
-		GenerateBasePatchesTask genTask = tasks.create(
+		TaskProvider<GenerateBasePatchesTask> genTaskProvider = tasks.register(
 				genTaskName, GenerateBasePatchesTask.class);
-		genTask.setDescription("Generates all of the " + sourceSet.getName()
-				+ " base patches, removing any existing ones.");
 
-		ApplyBasePatchesTask applyTask = tasks.create(
+		TaskProvider<ApplyBasePatchesTask> applyTaskProvider = tasks.register(
 				applyTaskName, ApplyBasePatchesTask.class);
-		applyTask.setDescription("Applies all of the " + sourceSet.getName()
-				+ " base patches, overwriting any other modified source.");
 
 		// Set the default locations for the tasks (so that the user doesn't
 		// need to specify them)
-		processTask.setPatches(baseDirectoryDelegate.getPatches());
-		processTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
-		processTask.setOrigJar((Callable<File>)this::getMcSourcesJar);
-		processTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
+		processTaskProvider.configure(processTask -> {
+			processTask.setDescription("Processes all of the " + sourceSet.getName()
+					+ " base patches, applying and generating them as needed.");
 
-		genTask.setPatches(baseDirectoryDelegate.getPatches());
-		genTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
-		genTask.setOrigJar((Callable<File>)this::getMcSourcesJar);
-		genTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
+			processTask.setPatches(baseDirectoryDelegate.getPatches());
+			processTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
+			processTask.setOrigJar(getMcSourcesJar());
+			processTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
+		});
 
-		applyTask.setPatches(baseDirectoryDelegate.getPatches());
-		applyTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
-		applyTask.setOrigJar((Callable<File>)this::getMcSourcesJar);
-		applyTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
+		genTaskProvider.configure(genTask -> {
+			genTask.setDescription("Generates all of the " + sourceSet.getName()
+					+ " base patches, removing any existing ones.");
+
+			genTask.setPatches(baseDirectoryDelegate.getPatches());
+			genTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
+			genTask.setOrigJar(getMcSourcesJar());
+			genTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
+		});
+
+		applyTaskProvider.configure(applyTask -> {
+			applyTask.setDescription("Applies all of the " + sourceSet.getName()
+					+ " base patches, overwriting any other modified source.");
+
+			applyTask.setPatches(baseDirectoryDelegate.getPatches());
+			applyTask.setPatchedSource(baseDirectoryDelegate.getPatchedSource());
+			applyTask.setOrigJar(getMcSourcesJar());
+			applyTask.setBaseClasses(baseDirectoryDelegate.getBaseClassesCallable());
+		});
 
 		// Order the tasks
-		tasks.getByName(sourceSet.getCompileJavaTaskName()).dependsOn(processTask);
+		// XXX Don't enable this by default for now, due to processing time
+		// tasks.getByName(sourceSet.getCompileJavaTaskName()).dependsOn(processTask);
 		// TODO: What else do I want?  SourceJar?
 
 		// Tell the java plugin to compile the patched source
@@ -226,8 +204,11 @@ public class BaseEditPlugin extends UserDevPlugin {
 	}
 
 	private File getMcSourcesJar() throws IllegalStateException {
+		if (mcSourcesJarDesc == null) {
+			throw new IllegalStateException("mcSourcesJarDesc is still null -- getMcSourcesJar actually called before afterEvaluate?");
+		}
 		if (mcSourcesJar == null) {
-			throw new IllegalStateException("mcSourcesJar is still null -- getMcSourcesJar actually called before afterEvaluate?");
+			mcSourcesJar = MavenArtifactDownloader.generate(project, mcSourcesJarDesc, false);
 		}
 		return mcSourcesJar;
 	}
