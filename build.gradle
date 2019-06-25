@@ -105,7 +105,13 @@ subprojects {
 }
 
 def getGitHash() {
-	def process = 'git rev-parse --short HEAD'.execute()
-	process.waitFor()
-	return '-' + (process.exitValue() > 0 ? 'unknown' : process.text.trim())
+	try {
+		def process = 'git rev-parse --short HEAD'.execute()
+		process.waitFor()
+		return '-' + (process.exitValue() > 0 ? 'unknown' : process.text.trim())
+	} catch (Exception ex) {
+		logger.warn "Failed to run git to get current version: " + ex.toString()
+		logger.warn "The exact revision will not be listed, but the program will still work normally."
+		return '-unknown'
+	}
 }
