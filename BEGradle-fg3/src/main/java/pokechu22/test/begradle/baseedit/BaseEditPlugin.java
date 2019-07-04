@@ -89,7 +89,10 @@ public class BaseEditPlugin extends UserDevPlugin {
 		Configuration minecraft = project.getConfigurations().getByName("minecraft");
 
 		// TODO: In gradle 5.0, there's a named(String, Class<S>)
+		@SuppressWarnings({ "unchecked", "rawtypes" })
 		TaskProvider<ExtractMCPData> extractSrg = (TaskProvider)project.getTasks().named("extractSrg");
+		@SuppressWarnings({ "unchecked", "rawtypes" })
+		TaskProvider<TaskCreateSrg> createMcpToSrg = (TaskProvider)project.getTasks().named("createMcpToSrg");
 		TaskProvider<TaskCreateSrg> createMcpToNotch = project.getTasks().register("createMcpToNotch", TaskCreateSrg.class);
 
 		createMcpToNotch.configure(task -> {
@@ -112,6 +115,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 		project.afterEvaluate(p -> {
 			// Tell it to reobf using the mcp->notch srg
 			project.getTasks().withType(RenameJarInPlace.class, task -> {
+				task.getDependsOn().remove(createMcpToSrg);
 				task.dependsOn(createMcpToNotch);
 				task.setMappings(createMcpToNotch.get().getOutput());
 			});
