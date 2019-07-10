@@ -20,7 +20,6 @@ import net.minecraftforge.gradle.user.TaskSingleReobf;
 import net.minecraftforge.gradle.user.UserBasePlugin;
 import net.minecraftforge.gradle.util.delayed.DelayedFile;
 
-import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
@@ -62,17 +61,14 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 				.put("extraSrgs", extraSrgContainer.new ConfigurationDelegate());
 
 		project.getLogger().debug("Preparing afterEvaluate for SRG injection");
-		project.afterEvaluate(new Action<Project>() {
-			@Override
-			public void execute(Project project) {
-				project.getLogger().debug("Calling afterEvaluate for SRG injection");
-				if (project.getState().getFailure() != null) {
-					project.getLogger().debug("Failed, aborting!");
-					return;
-				}
-
-				afterEvaluate();
+		project.afterEvaluate(project_ -> {
+			project_.getLogger().debug("Calling afterEvaluate for SRG injection");
+			if (project_.getState().getFailure() != null) {
+				project_.getLogger().debug("Failed, aborting!");
+				return;
 			}
+
+			afterEvaluate();
 		});
 	}
 
