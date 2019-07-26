@@ -9,6 +9,7 @@ import javax.annotation.Nonnull;
 
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ExternalModuleDependency;
@@ -38,9 +39,9 @@ public class BaseEditPlugin extends UserDevPlugin {
 	// Null until apply
 	private Project project;
 	// Null until afterEvaluate
-	private String mcSourcesJarDesc;
-	// Null until getMcSourcesJar is called
-	private File mcSourcesJar;
+	private String mcSourcesJarDesc, mcBinJarDesc;
+	// Null until getMcSourcesJar/getMcBinJar is called
+	private File mcSourcesJar, mcBinJar;
 
 	@Override
 	public void apply(@Nonnull Project project) {
@@ -94,6 +95,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 		@SuppressWarnings({ "unchecked", "rawtypes" })
 		TaskProvider<TaskCreateSrg> createMcpToSrg = (TaskProvider)project.getTasks().named("createMcpToSrg");
 		TaskProvider<TaskCreateSrg> createMcpToNotch = project.getTasks().register("createMcpToNotch", TaskCreateSrg.class);
+		TaskProvider<Task> setupDecompProvider = tasks.register("setupDecompWorkspace");
 
 		createMcpToNotch.configure(task -> {
 			task.dependsOn(extractSrg);
@@ -110,6 +112,17 @@ public class BaseEditPlugin extends UserDevPlugin {
 			String desc = "de.oceanlabs.mcp:mcp_" + channel + ":" + version + "@zip";
 			File mappingsFile = MavenArtifactDownloader.manual(project, desc, false);
 			task.setMappings(mappingsFile);
+		});
+		setupDecompProvider.configure(task -> {
+			task.doFirst(t -> {
+				// Must resolve sources before bin for bin to be a recompiled one
+				t.getLogger().lifecycle("Resolving sources jar...");
+				getMcSourcesJar();
+				t.getLogger().lifecycle("Resolved sources jar.");
+				t.getLogger().lifecycle("Resolving bin jar...");
+				getMcBinJar();
+				t.getLogger().lifecycle("Resolved bin jar.");
+			});
 		});
 
 		project.afterEvaluate(p -> {
@@ -131,6 +144,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 			}
 
 			mcSourcesJarDesc = dep.getGroup() + ":" + dep.getName() + ":" + dep.getVersion() + ":sources";
+			mcBinJarDesc = dep.getGroup() + ":" + dep.getName() + ":" + dep.getVersion();
 		});
 	}
 
@@ -215,6 +229,16 @@ public class BaseEditPlugin extends UserDevPlugin {
 			mcSourcesJar = MavenArtifactDownloader.generate(project, mcSourcesJarDesc, false);
 		}
 		return mcSourcesJar;
+	}
+
+	private File getMcBinJar() throws IllegalStateException {
+		if (mcBinJarDesc == null) {
+			throw new IllegalStateException("mcBinJarDesc is still null -- getMcBinJar actually called before afterEvaluate?");
+		}
+		if (mcBinJar == null) {
+			mcBinJar = MavenArtifactDownloader.generate(project, mcBinJarDesc, false);
+		}
+		return mcBinJar;
 	}
 
 	protected void configureEclipse() {
