@@ -35,7 +35,7 @@ subprojects {
 		apply plugin: 'maven'
 
 		group = 'pokechu22.test.begradle'
-		version = '0.2.2-SNAPSHOT'
+		version = '0.2.2'
 		archivesBaseName = 'begradle'
 		targetCompatibility = '1.8'
 		sourceCompatibility = '1.8'
