@@ -16,7 +16,7 @@ buildscript {
 }
 
 subprojects {
-	if (project.name != 'share') {
+	if (project.name.contains("BEGradle")) {
 		task regenEclipse {
 			// Delete the eclipse classpath and project and then recreate it, without doing any of the slower bits.
 			dependsOn 'cleanEclipseProject'
