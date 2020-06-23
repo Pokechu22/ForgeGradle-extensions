@@ -99,6 +99,7 @@ public class BaseEditPlugin extends UserDevPlugin {
 		createMcpToNotch.configure(task -> {
 			task.dependsOn(extractSrg);
 			task.setNotch(true);
+			task.setReverse(true);
 			task.setSrg(extractSrg.get().getOutput());
 			task.setMappings(extension.getMappings());
 		});
