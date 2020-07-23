@@ -2,7 +2,6 @@ package pokechu22.test.begradle.customsrg;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -12,12 +11,7 @@ import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 
-import au.com.bytecode.opencsv.CSVParser;
-import au.com.bytecode.opencsv.CSVReader;
-import au.com.bytecode.opencsv.CSVWriter;
-
 import com.google.common.collect.Maps;
-import com.google.common.io.Files;
 
 public class GenCsvsTask extends DefaultTask {
 	private Object inMethodsCSV;
@@ -162,84 +156,32 @@ public class GenCsvsTask extends DefaultTask {
 	public void doTask() throws IOException {
 		// Read the methods CSV, replacing things as needed:
 		LinkedHashMap<String, String[]> methods = Maps.newLinkedHashMap();
-		process(getInMethodsCSV(), methods);
+		ExtraSrgUtil.readCSVInto(getInMethodsCSV(), methods);
 		for (File file : getExtraMethods()) {
-			process(file, methods);
+			ExtraSrgUtil.readCSVInto(file, methods);
 		}
 
 		// ... and then write it
-		write(getOutMethodsCSV(), methods, false);
+		ExtraSrgUtil.writeCSV(getOutMethodsCSV(), methods, false);
 
 		// Same process for the fields:
 
 		LinkedHashMap<String, String[]> fields = Maps.newLinkedHashMap();
-		process(getInFieldsCSV(), fields);
+		ExtraSrgUtil.readCSVInto(getInFieldsCSV(), fields);
 		for (File file : getExtraFields()) {
-			process(file, fields);
+			ExtraSrgUtil.readCSVInto(file, fields);
 		}
 
-		write(getOutFieldsCSV(), fields, false);
+		ExtraSrgUtil.writeCSV(getOutFieldsCSV(), fields, false);
 
 		// And for parameters:
 
 		LinkedHashMap<String, String[]> params = Maps.newLinkedHashMap();
-		process(getInParamsCSV(), params);
+		ExtraSrgUtil.readCSVInto(getInParamsCSV(), params);
 		for (File file : getExtraParams()) {
-			process(file, params);
+			ExtraSrgUtil.readCSVInto(file, params);
 		}
 
-		write(getOutParamsCSV(), params, true);
-	}
-
-	private CSVReader getCSVReader(File file) throws IOException {
-		return new CSVReader(Files.newReader(file, Charset.defaultCharset()), CSVParser.DEFAULT_SEPARATOR, CSVParser.DEFAULT_QUOTE_CHARACTER, CSVParser.NULL_CHARACTER, 1, false);
-	}
-
-	/**
-	 * Processes the given CSV file, adding data from the given map.
-	 *
-	 * @param file
-	 *            The file to read from.
-	 * @param map
-	 *            The map to update. Key is the first CSV field, values are ALL
-	 *            of the CSV fields.
-	 * @throws IOException when an IO error occurs
-	 */
-	private void process(File file, LinkedHashMap<String, String[]> map) throws IOException {
-		try (CSVReader csvReader = getCSVReader(file)) {
-			for (String[] data : csvReader.readAll()) {
-				map.put(data[0], data);
-			}
-		}
-	}
-
-	/** The header used for MCP method and field CSVs. */
-	private static final String[] HEADER = { "searge", "name", "side", "desc" };
-
-	/** The header used for MCP parameter CSVs. Note that parameter descriptions are in the method. */
-	private static final String[] PARAMS_HEADER = { "param", "name", "side" };
-
-	/**
-	 * Writes the processed CSV file.
-	 *
-	 * @param file
-	 *            The file to write to.
-	 * @param map
-	 *            The map with the data. Only the values are used.
-	 * @param params
-	 *            True if this is a parameter CSV.
-	 * @throws IOException when an IO error occurs
-	 */
-	private void write(File file, LinkedHashMap<String, String[]> map, boolean params) throws IOException {
-		try (CSVWriter writer = new CSVWriter(Files.newWriter(file,
-				Charset.defaultCharset()), CSVWriter.DEFAULT_SEPARATOR,
-				CSVWriter.DEFAULT_QUOTE_CHARACTER, CSVWriter.NO_ESCAPE_CHARACTER,
-				CSVWriter.DEFAULT_LINE_END)) {
-			writer.writeNext(params ? PARAMS_HEADER : HEADER);
-
-			for (String[] line : map.values()) {
-				writer.writeNext(line);
-			}
-		}
+		ExtraSrgUtil.writeCSV(getOutParamsCSV(), params, true);
 	}
 }

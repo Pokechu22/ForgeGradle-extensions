@@ -1,11 +1,22 @@
 package pokechu22.test.begradle.customsrg;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import com.google.common.base.Joiner;
+import com.google.common.io.Files;
+
+import au.com.bytecode.opencsv.CSVParser;
+import au.com.bytecode.opencsv.CSVReader;
+import au.com.bytecode.opencsv.CSVWriter;
 
 import net.minecraftforge.srg2source.rangeapplier.MethodData;
 import net.minecraftforge.srg2source.rangeapplier.SrgContainer;
@@ -199,6 +210,83 @@ public class ExtraSrgUtil {
 			return classMap.get(className);
 		} else {
 			return className;
+		}
+	}
+
+	/**
+	 * Processes the given CSV file, adding data from the given map.
+	 *
+	 * @param file
+	 *            The file to read from.
+	 * @param map
+	 *            The map to update. Key is the first CSV field, values are ALL
+	 *            of the CSV fields.
+	 * @throws IOException when an IO error occurs
+	 */
+	public static void readCSVInto(File file, Map<String, String[]> map) throws IOException {
+		readCSVInto(Files.newReader(file, Charset.defaultCharset()), map);
+	}
+
+	/**
+	 * Processes the given CSV file, adding data from the given map.
+	 *
+	 * @param reader
+	 *            The object to read from.
+	 * @param map
+	 *            The map to update. Key is the first CSV field, values are ALL
+	 *            of the CSV fields.
+	 * @throws IOException when an IO error occurs
+	 */
+	public static void readCSVInto(Reader reader, Map<String, String[]> map) throws IOException {
+		try (CSVReader csvReader = new CSVReader(reader, CSVParser.DEFAULT_SEPARATOR,
+				CSVParser.DEFAULT_QUOTE_CHARACTER, CSVParser.NULL_CHARACTER, 1, false)) {
+			for (String[] data : csvReader.readAll()) {
+				map.put(data[0], data);
+			}
+		}
+	}
+
+	/**
+	 * Writes the processed CSV file.
+	 *
+	 * @param writer
+	 *            The file to write to.
+	 * @param map
+	 *            The map with the data. Only the values are used.
+	 * @param isParams
+	 *            True if this is a parameter CSV.
+	 * @throws IOException when an IO error occurs
+	 */
+	public static void writeCSV(File file, LinkedHashMap<String, String[]> map, boolean isParams) throws IOException {
+		writeCSV(Files.newWriter(file, Charset.defaultCharset()), map, isParams);
+	}
+
+	/** The header used for MCP method and field CSVs. */
+	private static final String[] HEADER = { "searge", "name", "side", "desc" };
+
+	/** The header used for MCP parameter CSVs. Note that parameter descriptions are in the method. */
+	private static final String[] PARAMS_HEADER = { "param", "name", "side" };
+
+	/**
+	 * Writes the processed CSV file.
+	 *
+	 * @param writer
+	 *            The object to write to.
+	 * @param map
+	 *            The map with the data. Only the values are used.
+	 * @param isParams
+	 *            True if this is a parameter CSV.
+	 * @throws IOException when an IO error occurs
+	 */
+	public static void writeCSV(Writer writer, LinkedHashMap<String, String[]> map, boolean isParams) throws IOException {
+		try (CSVWriter csvWriter = new CSVWriter(writer, CSVWriter.DEFAULT_SEPARATOR,
+				CSVWriter.DEFAULT_QUOTE_CHARACTER, CSVWriter.NO_ESCAPE_CHARACTER,
+				CSVWriter.DEFAULT_LINE_END)) {
+			csvWriter.writeNext(isParams ? PARAMS_HEADER : HEADER);
+
+			for (String[] line : map.values()) {
+				csvWriter.writeNext(line);
+			}
 		}
 	}
 }
