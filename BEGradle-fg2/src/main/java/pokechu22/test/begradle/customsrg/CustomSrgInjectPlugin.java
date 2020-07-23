@@ -111,6 +111,8 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			genCsvs.setOutMethodsCSV(delayedFile(CUSTOM_CSV_METHOD));
 			genCsvs.setInFieldsCSV(delayedFile(CSV_FIELD));
 			genCsvs.setOutFieldsCSV(delayedFile(CUSTOM_CSV_FIELD));
+			genCsvs.setInParamsCSV(delayedFile(CSV_PARAM));
+			genCsvs.setOutParamsCSV(delayedFile(CUSTOM_CSV_PARAM));
 			genCsvs.setExtraSrgContainer(extraSrgContainer);
 
 			genCsvs.setDescription("Generates custom MCP method and field CSVs.");
@@ -223,6 +225,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 
 				remap.setFieldsCsv(delayedFile(CUSTOM_CSV_FIELD));
 				remap.setMethodsCsv(delayedFile(CUSTOM_CSV_METHOD));
+				remap.setParamsCsv(delayedFile(CUSTOM_CSV_PARAM));
 				remap.dependsOn(TASK_GENERATE_CSVS);
 			}
 		}

@@ -28,8 +28,10 @@ public class CustomSrgConstants {
 	 * @see Constants#CSV_FIELD
 	 */
 	public static final String CUSTOM_CSV_FIELD        = DIR_CUSTOM_MCP_MAPPINGS + "/fields.csv";
-	// We're still not touching the params CSV, as it's harder to handle correctly (and less important)
-	// public static final String CUSTOM_CSV_PARAM        = DIR_CUSTOM_MCP_MAPPINGS + "/params.csv";
+	/**
+	 * @see Constants#CSV_PARAM
+	 */
+	public static final String CUSTOM_CSV_PARAM        = DIR_CUSTOM_MCP_MAPPINGS + "/params.csv";
 	/** @see Constants#SRG_NOTCH_TO_SRG */
 	public static final String CUSTOM_SRG_NOTCH_TO_SRG = DIR_CUSTOM_MCP_MAPPINGS + "/" + Constants.REPLACE_MC_VERSION + "/srgs/notch-srg.srg";
 	/** @see Constants#SRG_NOTCH_TO_MCP */

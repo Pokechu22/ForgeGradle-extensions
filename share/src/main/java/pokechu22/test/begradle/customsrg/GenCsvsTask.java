@@ -24,6 +24,8 @@ public class GenCsvsTask extends DefaultTask {
 	private Object outMethodsCSV;
 	private Object inFieldsCSV;
 	private Object outFieldsCSV;
+	private Object inParamsCSV;
+	private Object outParamsCSV;
 
 	private ExtraSrgContainer extraSrgContainer;
 
@@ -92,6 +94,38 @@ public class GenCsvsTask extends DefaultTask {
 	}
 
 	/**
+	 * Gets the original parameter CSV.
+	 * @return The original parameter CSV
+	 */
+	@InputFile
+	public File getInParamsCSV() {
+		return getProject().file(inParamsCSV);
+	}
+	/**
+	 * Sets the original parameter CSV.
+	 * @param inParamsCSV The original parameter CSV
+	 */
+	public void setInParamsCSV(Object inParamsCSV) {
+		this.inParamsCSV = inParamsCSV;
+	}
+
+	/**
+	 * Gets the new parameter CSV.
+	 * @return The new parameter CSV
+	 */
+	@OutputFile
+	public File getOutParamsCSV() {
+		return getProject().file(outParamsCSV);
+	}
+	/**
+	 * Sets the new parameter CSV.
+	 * @param outParamsCSV The new parameter CSV
+	 */
+	public void setOutParamsCSV(Object outParamsCSV) {
+		this.outParamsCSV = outParamsCSV;
+	}
+
+	/**
 	 * Gets the extra method CSVs.
 	 * @return The extra method CSVs.
 	 */
@@ -106,6 +140,14 @@ public class GenCsvsTask extends DefaultTask {
 	@InputFiles
 	public List<File> getExtraFields() {
 		return extraSrgContainer.getFields();
+	}
+	/**
+	 * Gets the extra parameter CSVs.
+	 * @return The extra parameter CSVs.
+	 */
+	@InputFiles
+	public List<File> getExtraParams() {
+		return extraSrgContainer.getParams();
 	}
 	/**
 	 * Collects data from the given extra SRG container.
@@ -126,7 +168,7 @@ public class GenCsvsTask extends DefaultTask {
 		}
 
 		// ... and then write it
-		write(getOutMethodsCSV(), methods);
+		write(getOutMethodsCSV(), methods, false);
 
 		// Same process for the fields:
 
@@ -136,7 +178,17 @@ public class GenCsvsTask extends DefaultTask {
 			process(file, fields);
 		}
 
-		write(getOutFieldsCSV(), fields);
+		write(getOutFieldsCSV(), fields, false);
+
+		// And for parameters:
+
+		LinkedHashMap<String, String[]> params = Maps.newLinkedHashMap();
+		process(getInParamsCSV(), params);
+		for (File file : getExtraParams()) {
+			process(file, params);
+		}
+
+		write(getOutParamsCSV(), params, true);
 	}
 
 	private CSVReader getCSVReader(File file) throws IOException {
@@ -164,6 +216,9 @@ public class GenCsvsTask extends DefaultTask {
 	/** The header used for MCP method and field CSVs. */
 	private static final String[] HEADER = { "searge", "name", "side", "desc" };
 
+	/** The header used for MCP parameter CSVs. Note that parameter descriptions are in the method. */
+	private static final String[] PARAMS_HEADER = { "param", "name", "side" };
+
 	/**
 	 * Writes the processed CSV file.
 	 *
@@ -171,14 +226,16 @@ public class GenCsvsTask extends DefaultTask {
 	 *            The file to write to.
 	 * @param map
 	 *            The map with the data. Only the values are used.
+	 * @param params
+	 *            True if this is a parameter CSV.
 	 * @throws IOException when an IO error occurs
 	 */
-	private void write(File file, LinkedHashMap<String, String[]> map) throws IOException {
+	private void write(File file, LinkedHashMap<String, String[]> map, boolean params) throws IOException {
 		try (CSVWriter writer = new CSVWriter(Files.newWriter(file,
 				Charset.defaultCharset()), CSVWriter.DEFAULT_SEPARATOR,
 				CSVWriter.DEFAULT_QUOTE_CHARACTER, CSVWriter.NO_ESCAPE_CHARACTER,
 				CSVWriter.DEFAULT_LINE_END)) {
-			writer.writeNext(HEADER);
+			writer.writeNext(params ? PARAMS_HEADER : HEADER);
 
 			for (String[] line : map.values()) {
 				writer.writeNext(line);

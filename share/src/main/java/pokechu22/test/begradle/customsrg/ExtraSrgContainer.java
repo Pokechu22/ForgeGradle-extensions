@@ -35,6 +35,7 @@ public final class ExtraSrgContainer {
 	private final List<File> srgs = new LinkedList<>();
 	private final List<File> methods = new LinkedList<>();
 	private final List<File> fields = new LinkedList<>();
+	private final List<File> params = new LinkedList<>();
 	private final Map<String, File> patches = new HashMap<>();
 
 	/**
@@ -62,6 +63,15 @@ public final class ExtraSrgContainer {
 	 */
 	public List<File> getFields() {
 		return fields;
+	}
+
+	/**
+	 * Gets a list of all extra parameter CSVs.
+	 *
+	 * @return The extra parameter CSVs.
+	 */
+	public List<File> getParams() {
+		return params;
 	}
 
 	/**
@@ -95,6 +105,9 @@ public final class ExtraSrgContainer {
 		}
 		for (File file : fields) {
 			names[i++] = "f_" + FilenameUtils.getBaseName(file.getAbsolutePath());
+		}
+		for (File file : params) {
+			names[i++] = "p_" + FilenameUtils.getBaseName(file.getAbsolutePath());
 		}
 		Arrays.sort(names);
 		StringBuilder sb = new StringBuilder();
@@ -146,6 +159,15 @@ public final class ExtraSrgContainer {
 	 */
 	public void addFields(File file) {
 		this.fields.add(file);
+		forceLocalCache.run();
+	}
+
+	/**
+	 * Adds a custom parameters CSV file, remapping parameters.
+	 * @param file The new fields CSV.
+	 */
+	public void addParams(File file) {
+		this.params.add(file);
 		forceLocalCache.run();
 	}
 
