@@ -95,7 +95,7 @@ public final class ExtraSrgContainer {
 			return null;
 		}
 
-		String[] names = new String[srgs.size() + methods.size() + fields.size()];
+		String[] names = new String[srgs.size() + methods.size() + fields.size() + params.size()];
 		int i = 0;
 		for (File file : srgs) {
 			names[i++] = "s_" + FilenameUtils.getBaseName(file.getAbsolutePath());
@@ -116,14 +116,15 @@ public final class ExtraSrgContainer {
 		}
 		// Prevent excessively long file names by taking a hash (and not even
 		// using the full hash in that case)
-		return "custom_" + DigestUtils.shaHex(sb.toString()).substring(0, 16);
+		return "custom-" + DigestUtils.shaHex(sb.toString()).substring(0, 16);
 	}
 
 	/**
 	 * @return True if there are any custom SRGs, methods, fields, or patches
 	 */
 	public boolean hasAny() {
-		return !this.srgs.isEmpty() || !this.methods.isEmpty() || !this.fields.isEmpty() || !this.patches.isEmpty();
+		return !this.srgs.isEmpty() || !this.methods.isEmpty() ||
+				!this.fields.isEmpty() || !this.params.isEmpty() || !this.patches.isEmpty();
 	} 
 
 	/**

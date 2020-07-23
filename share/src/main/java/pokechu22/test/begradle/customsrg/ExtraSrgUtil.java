@@ -249,7 +249,7 @@ public class ExtraSrgUtil {
 	/**
 	 * Writes the processed CSV file.
 	 *
-	 * @param writer
+	 * @param file
 	 *            The file to write to.
 	 * @param map
 	 *            The map with the data. Only the values are used.
