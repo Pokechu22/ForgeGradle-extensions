@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
@@ -102,7 +103,15 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		String newCsvsPath = "de/oceanlabs/mcp/mcp_" + channel + "/" + newVersion +
 				"/mcp_" + channel + "-" + newVersion + ".zip";
 
+		// We need to add the forge maven now, since it's used to download the mappings
+		// and otherwise we'd try to download them before UserDevPlugin adds it
+		project.getRepositories().maven(e -> {
+			e.setUrl(Utils.FORGE_MAVEN);
+		});
 		File origCsvs = MavenArtifactDownloader.manual(project, artifact, false); // performs a download
+		if (origCsvs == null) {
+			throw new RuntimeException("Failed to resolve " + artifact);
+		}
 
 		File newCsvs = Utils.getCache(project, "maven_downloader", newCsvsPath);
 
@@ -112,7 +121,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			Utils.updateHash(newCsvs, HashFunction.MD5);
 		} catch (IOException ex) {
 			project.getLogger().error("Failed to create new CSVs!", ex);
-			throw new RuntimeException(ex);
+			throw new UncheckedIOException(ex);
 		}
 
 		// This is enough to trick FG3 into using our new mappings
