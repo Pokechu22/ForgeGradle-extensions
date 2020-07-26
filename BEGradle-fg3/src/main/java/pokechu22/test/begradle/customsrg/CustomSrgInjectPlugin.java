@@ -3,19 +3,28 @@ package pokechu22.test.begradle.customsrg;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
+import org.apache.commons.io.IOUtils;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.Dependency;
+import org.gradle.api.artifacts.DependencySet;
+import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
@@ -27,6 +36,7 @@ import net.minecraftforge.gradle.common.util.MavenArtifactDownloader;
 import net.minecraftforge.gradle.common.util.MinecraftExtension;
 import net.minecraftforge.gradle.common.util.Utils;
 import net.minecraftforge.gradle.userdev.UserDevPlugin;
+import net.minecraftforge.srgutils.IMappingFile;
 
 /**
  * A plugin that handles custom SRG tasks.
@@ -87,6 +97,101 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			return;
 		}
 
+		// We need to add the forge maven now, since it's used to download the mappings
+		// and otherwise we'd try to download them before UserDevPlugin adds it
+		project.getRepositories().maven(e -> {
+			e.setUrl(Utils.FORGE_MAVEN);
+		});
+
+		if (extraSrgContainer.hasSrgs()) {
+			prepareCustomSrg();
+		}
+		if (extraSrgContainer.hasCsvs()) {
+			prepareCustomCsvs();
+		}
+	}
+
+	protected void prepareCustomSrg() {
+		Configuration minecraft = project.getConfigurations().getByName("minecraft");
+		DependencySet deps = minecraft.getDependencies();
+		if (deps.size() != 1) {
+			throw new RuntimeException("Expected only one minecraft dependency, but there were " + deps);
+		}
+		Dependency dep = deps.iterator().next();
+		if (!(dep instanceof ExternalModuleDependency)) {
+			throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
+		}
+		String newVersion = dep.getVersion() + "-" + extraSrgContainer.getSrgSpecifier();
+		String newArtifact = dep.getGroup() + ":" + dep.getName() + ":" + newVersion;
+		// Trick FG3 into using a new MCPConfig.  This only works for a direct MC dependency at the moment.
+		String mcpConfig = "de.oceanlabs.mcp:mcp_config:" + dep.getVersion() + "@zip";
+		String newMcpConfigPath = "de/oceanlabs/mcp/mcp_config/" + newVersion +
+				"/mcp_config-" + newVersion + ".zip";
+
+		File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false); // performs a download
+		if (origConfig == null) {
+			throw new RuntimeException("Failed to resolve " + mcpConfig);
+		}
+
+		File newConfig = Utils.getCache(project, "maven_downloader", newMcpConfigPath);
+
+		try {
+			Files.deleteIfExists(newConfig.toPath());
+			createModifiedMcpConfig(origConfig, newConfig);
+			Utils.updateHash(newConfig, HashFunction.MD5);
+		} catch (IOException ex) {
+			project.getLogger().error("Failed to create new SRGs!", ex);
+			throw new UncheckedIOException(ex);
+		}
+
+		project.getLogger().lifecycle("NEW DEP " + newArtifact);
+		project.getLogger().lifecycle("Deplist" + deps);
+		deps.remove(dep);
+		project.getLogger().lifecycle("Deplist" + deps);
+		deps.add(project.getDependencies().create(newArtifact));
+		project.getLogger().lifecycle("Deplist" + deps);
+	}
+
+	protected void createModifiedMcpConfig(File origConfig, File newConfig) throws IOException {
+		try (ZipFile file = new ZipFile(origConfig)) {
+
+			newConfig.getParentFile().mkdirs();
+			try (ZipOutputStream stream = new ZipOutputStream(new FileOutputStream(newConfig))) {
+				Enumeration<? extends ZipEntry> entries = file.entries(); // bad API :(
+				while (entries.hasMoreElements()) {
+					ZipEntry entry = entries.nextElement();
+					if (entry.getName().equals("config/joined.tsrg")) {
+						ZipEntry newEntry = new ZipEntry(entry.getName());
+						newEntry.setTime(entry.getTime());
+						stream.putNextEntry(newEntry);
+						try (InputStream istream = file.getInputStream(entry)) {
+							writeRemappedSrg(istream, stream);
+						}
+					} else {
+						stream.putNextEntry(entry);
+						try (InputStream istream = file.getInputStream(entry)) {
+							IOUtils.copy(istream, stream);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	protected void writeRemappedSrg(InputStream inSrg, OutputStream outSrg) throws IOException {
+		IMappingFile mapping = IMappingFile.load(inSrg);
+		for (File file : extraSrgContainer.getSrgs()) {
+			mapping = mapping.chain(IMappingFile.load(file));
+		}
+		Path tempFile = Files.createTempFile("RemappedSRG", ".tsrg");
+		tempFile.toFile().deleteOnExit();
+		mapping.write(tempFile, IMappingFile.Format.TSRG, false); // No write to stream :|
+		try (InputStream s = Files.newInputStream(tempFile, StandardOpenOption.DELETE_ON_CLOSE)) {
+			IOUtils.copy(s, outSrg);
+		}
+	}
+
+	protected void prepareCustomCsvs() {
 		MinecraftExtension minecraft = project.getExtensions().findByType(MinecraftExtension.class);
 		// AWFUL hack: manually put the file in the expected place
 		// Note that to my understanding it'll still make a web request to
@@ -103,11 +208,6 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		String newCsvsPath = "de/oceanlabs/mcp/mcp_" + channel + "/" + newVersion +
 				"/mcp_" + channel + "-" + newVersion + ".zip";
 
-		// We need to add the forge maven now, since it's used to download the mappings
-		// and otherwise we'd try to download them before UserDevPlugin adds it
-		project.getRepositories().maven(e -> {
-			e.setUrl(Utils.FORGE_MAVEN);
-		});
 		File origCsvs = MavenArtifactDownloader.manual(project, artifact, false); // performs a download
 		if (origCsvs == null) {
 			throw new RuntimeException("Failed to resolve " + artifact);
@@ -117,7 +217,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 
 		try {
 			Files.deleteIfExists(newCsvs.toPath());
-			processCsvs(origCsvs, newCsvs);
+			createMergedCsvs(origCsvs, newCsvs);
 			Utils.updateHash(newCsvs, HashFunction.MD5);
 		} catch (IOException ex) {
 			project.getLogger().error("Failed to create new CSVs!", ex);
@@ -128,7 +228,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		minecraft.mappings(channel, newVersion);
 	}
 
-	protected void processCsvs(File origCsvs, File newCsvs) throws IOException {
+	protected void createMergedCsvs(File origCsvs, File newCsvs) throws IOException {
 		LinkedHashMap<String, String[]> methods = Maps.newLinkedHashMap();
 		LinkedHashMap<String, String[]> fields = Maps.newLinkedHashMap();
 		LinkedHashMap<String, String[]> params = Maps.newLinkedHashMap();

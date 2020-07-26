@@ -84,6 +84,36 @@ public final class ExtraSrgContainer {
 	}
 
 	/**
+	 * Gets a specifying string for the custom SRGs and patches in this container,
+	 * designed to allow for useful caching without overwriting. The specifier is
+	 * designed to be mostly unique, but that is not guaranteed.
+	 *
+	 * @return The specifier, or null if no extra SRGs
+	 */
+	public String getSrgSpecifier() {
+		if (!hasAny()) {
+			return null;
+		}
+
+		String[] names = new String[srgs.size() + patches.size()];
+		int i = 0;
+		for (File file : srgs) {
+			names[i++] = "s_" + FilenameUtils.getBaseName(file.getAbsolutePath());
+		}
+		for (Map.Entry<String, File> e : patches.entrySet()) {
+			names[i++] = "p_" + e.getKey() + "_" + FilenameUtils.getBaseName(e.getValue().getAbsolutePath());
+		}
+		Arrays.sort(names);
+		StringBuilder sb = new StringBuilder();
+		for (String s : names) {
+			sb.append('_').append(s);
+		}
+		// Prevent excessively long file names by taking a hash (and not even
+		// using the full hash in that case)
+		return "custom-" + DigestUtils.shaHex(sb.toString()).substring(0, 16);
+	}
+
+	/**
 	 * Gets a specifying string for this container, designed to allow for useful
 	 * caching without overwriting.  The specifier is designed to be mostly
 	 * unique, but that is not guaranteed.
@@ -120,12 +150,25 @@ public final class ExtraSrgContainer {
 	}
 
 	/**
-	 * @return True if there are any custom SRGs, methods, fields, or patches
+	 * @return True if there are any custom SRGs, methods, fields, params, or patches
 	 */
 	public boolean hasAny() {
-		return !this.srgs.isEmpty() || !this.methods.isEmpty() ||
-				!this.fields.isEmpty() || !this.params.isEmpty() || !this.patches.isEmpty();
-	} 
+		return hasSrgs() || hasCsvs();
+	}
+
+	/**
+	 * @return True if there are any custom SRGs or patches
+	 */
+	public boolean hasSrgs() {
+		return !srgs.isEmpty() || !patches.isEmpty();
+	}
+
+	/**
+	 * @return True if there are any custom methods, fields, or params
+	 */
+	public boolean hasCsvs() {
+		return !methods.isEmpty() || !fields.isEmpty() || !params.isEmpty();
+	}
 
 	/**
 	 * @deprecated use {@link #addSrg(File)}
