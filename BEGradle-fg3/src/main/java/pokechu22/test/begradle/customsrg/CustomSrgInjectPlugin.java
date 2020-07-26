@@ -13,7 +13,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -144,35 +146,56 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			throw new UncheckedIOException(ex);
 		}
 
-		project.getLogger().lifecycle("NEW DEP " + newArtifact);
-		project.getLogger().lifecycle("Deplist" + deps);
 		deps.remove(dep);
-		project.getLogger().lifecycle("Deplist" + deps);
 		deps.add(project.getDependencies().create(newArtifact));
-		project.getLogger().lifecycle("Deplist" + deps);
 	}
 
 	protected void createModifiedMcpConfig(File origConfig, File newConfig) throws IOException {
-		try (ZipFile file = new ZipFile(origConfig)) {
+		// Create a copy for mutation
+		Map<String, File> patches = new HashMap<>(extraSrgContainer.getPatches());
+		long tsrgTime = 0; // If not found, whatever, it'll still produce a consistent time
 
-			newConfig.getParentFile().mkdirs();
-			try (ZipOutputStream stream = new ZipOutputStream(new FileOutputStream(newConfig))) {
-				Enumeration<? extends ZipEntry> entries = file.entries(); // bad API :(
-				while (entries.hasMoreElements()) {
-					ZipEntry entry = entries.nextElement();
-					if (entry.getName().equals("config/joined.tsrg")) {
-						ZipEntry newEntry = new ZipEntry(entry.getName());
-						newEntry.setTime(entry.getTime());
-						stream.putNextEntry(newEntry);
-						try (InputStream istream = file.getInputStream(entry)) {
-							writeRemappedSrg(istream, stream);
-						}
-					} else {
-						stream.putNextEntry(entry);
-						try (InputStream istream = file.getInputStream(entry)) {
-							IOUtils.copy(istream, stream);
-						}
+		newConfig.getParentFile().mkdirs();
+
+		try (ZipFile file = new ZipFile(origConfig);
+				ZipOutputStream stream = new ZipOutputStream(new FileOutputStream(newConfig))) {
+			Enumeration<? extends ZipEntry> entries = file.entries(); // bad API :(
+
+			while (entries.hasMoreElements()) {
+				ZipEntry entry = entries.nextElement();
+				String name = entry.getName();
+				if (name.equals("config/joined.tsrg")) {
+					ZipEntry newEntry = new ZipEntry(entry.getName());
+					tsrgTime = entry.getTime();
+					newEntry.setTime(tsrgTime);
+					stream.putNextEntry(newEntry);
+					try (InputStream istream = file.getInputStream(entry)) {
+						writeRemappedSrg(istream, stream);
 					}
+				} else if (name.startsWith("patches/")
+						&& patches.containsKey(name.substring("patches/".length()))) {
+					// Replacing a patch - remove it since we don't want to add it again later
+					File patch = patches.remove(name.substring("patches/".length()));
+					ZipEntry newEntry = new ZipEntry(entry.getName());
+					newEntry.setTime(entry.getTime());
+					stream.putNextEntry(newEntry);
+					try (InputStream istream = Files.newInputStream(patch.toPath())) {
+						IOUtils.copy(istream, stream);
+					}
+				} else {
+					stream.putNextEntry(entry);
+					try (InputStream istream = file.getInputStream(entry)) {
+						IOUtils.copy(istream, stream);
+					}
+				}
+			}
+
+			for (Map.Entry<String, File> e : patches.entrySet()) {
+				ZipEntry newEntry = new ZipEntry("patches/" + e.getKey());
+				newEntry.setTime(tsrgTime);
+				stream.putNextEntry(newEntry);
+				try (InputStream istream = Files.newInputStream(e.getValue().toPath())) {
+					IOUtils.copy(istream, stream);
 				}
 			}
 		}
