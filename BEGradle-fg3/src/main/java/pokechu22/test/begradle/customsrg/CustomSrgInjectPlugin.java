@@ -32,6 +32,8 @@ import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
 
 import com.google.common.collect.Maps;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import net.minecraftforge.gradle.common.util.HashFunction;
 import net.minecraftforge.gradle.common.util.MavenArtifactDownloader;
@@ -123,12 +125,40 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		if (!(dep instanceof ExternalModuleDependency)) {
 			throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
 		}
+		boolean isPatcher = !dep.getGroup().equals("net.minecraft");
 		String newVersion = dep.getVersion() + "-" + extraSrgContainer.getSrgSpecifier();
 		String newArtifact = dep.getGroup() + ":" + dep.getName() + ":" + newVersion;
-		// Trick FG3 into using a new MCPConfig.  This only works for a direct MC dependency at the moment.
-		String mcpConfig = "de.oceanlabs.mcp:mcp_config:" + dep.getVersion() + "@zip";
-		String newMcpConfigPath = "de/oceanlabs/mcp/mcp_config/" + newVersion +
-				"/mcp_config-" + newVersion + ".zip";
+		String mcpConfigVersion;
+
+		if (isPatcher) {
+			String patcherArtifact = dep.getGroup() + ":" + dep.getName() + ":" +
+					dep.getVersion()  + ":userdev";
+			File origPatcher = MavenArtifactDownloader.manual(project, patcherArtifact, false);
+			if (origPatcher == null) {
+				throw new RuntimeException("Failed to resolve " + patcherArtifact);
+			}
+
+			String newPatcherPath = dep.getGroup().replace('.', '/') + "/" + dep.getName() +
+					"/" + newVersion + "/" + dep.getName() + "-" + newVersion + "-userdev.jar";
+			File newPatcher = Utils.getCache(project, "maven_downloader", newPatcherPath);
+
+			try {
+				Files.deleteIfExists(newPatcher.toPath());
+				mcpConfigVersion = createModifiedPatcher(origPatcher, newPatcher);
+				Utils.updateHash(newPatcher, HashFunction.MD5);
+			} catch (IOException ex) {
+				project.getLogger().error("Failed to create new patcher!", ex);
+				throw new UncheckedIOException(ex);
+			}
+		} else {
+			mcpConfigVersion = dep.getVersion();
+		}
+
+		// Create the modified MCPConfig.
+		String mcpConfig = "de.oceanlabs.mcp:mcp_config:" + mcpConfigVersion + "@zip";
+		String newMcpConfigVersion = mcpConfigVersion + "-" + extraSrgContainer.getSrgSpecifier();
+		String newMcpConfigPath = "de/oceanlabs/mcp/mcp_config/" + newMcpConfigVersion +
+				"/mcp_config-" + newMcpConfigVersion + ".zip";
 
 		File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false); // performs a download
 		if (origConfig == null) {
@@ -146,8 +176,93 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			throw new UncheckedIOException(ex);
 		}
 
+		// Make ForgeGradle use our new artifact, which should in turn get it to use the
+		// right MCPConfig.
 		deps.remove(dep);
 		deps.add(project.getDependencies().create(newArtifact));
+	}
+
+	/**
+	 * Creates a modified patcher with a new config.
+	 *
+	 * @param origPatcher The original patcher file.
+	 * @param newPatcher The file to generate for the new patcher.
+	 * @return Returns the current MCP config version.
+	 * @throws IOException if reading or writing fails
+	 */
+	protected String createModifiedPatcher(File origPatcher, File newPatcher) throws IOException {
+		String configVersion;
+
+		try (ZipFile file = new ZipFile(origPatcher)) {
+			ZipEntry configEntry = file.getEntry("config.json");
+			if (configEntry == null) {
+				throw new RuntimeException("Missing config.json in " + origPatcher);
+			}
+
+			JsonParser parser = new JsonParser();
+			JsonElement obj;
+			try (InputStream stream = file.getInputStream(configEntry)) {
+				obj = parser.parse(new InputStreamReader(stream));
+			}
+			assert obj.isJsonObject();
+
+			JsonElement mcpConfigElt = obj.getAsJsonObject().get("mcp");
+			if (mcpConfigElt == null || !mcpConfigElt.isJsonPrimitive()
+					|| !mcpConfigElt.getAsJsonPrimitive().isString()) {
+				// Could happen with other patchers, but doesn't seem to apply to forge
+				throw new RuntimeException("Patcher doesn't directly depend on mcpconfig: " + origPatcher);
+			}
+			String mcpConfig = obj.getAsJsonObject().get("mcp").getAsString();
+			String[] parts = mcpConfig.split(":");
+			if (parts.length != 3) {
+				throw new RuntimeException("Unexpected MCP config string " + mcpConfig);
+			}
+			String group = parts[0];
+			String name = parts[1];
+			if (!group.equals("de.oceanlabs.mcp") || !name.equals("mcp_config")) {
+				throw new RuntimeException("Unexpected MCP config dependency string " + mcpConfig);
+			}
+			String versionAndExt = parts[2];
+			int atIndex = versionAndExt.indexOf('@');
+			if (atIndex == -1) {
+				throw new RuntimeException("Expected @ in MCP config string " + mcpConfig);
+			}
+			configVersion = versionAndExt.substring(0, atIndex);
+			String extension = versionAndExt.substring(atIndex + 1);
+			if (!extension.equals("zip")) {
+				throw new RuntimeException("Unexpected MCP config dependency extension " + mcpConfig);
+			}
+
+			String newConfigVersion = configVersion + "-" + extraSrgContainer.getSrgSpecifier();
+			String newConfigSpec = "de.oceanlabs.mcp:mcp_config:" + newConfigVersion + "@zip";
+			obj.getAsJsonObject().addProperty("mcp", newConfigSpec); // This puts in this case
+
+			newPatcher.getParentFile().mkdirs();
+
+			Enumeration<? extends ZipEntry> entries = file.entries(); // bad API :(
+
+			try (ZipOutputStream stream = new ZipOutputStream(new FileOutputStream(newPatcher))) {
+				while (entries.hasMoreElements()) {
+					ZipEntry entry = entries.nextElement();
+					if (entry.getName().equals("config.json")) {
+						ZipEntry newEntry = new ZipEntry("config.json");
+						newEntry.setTime(entry.getTime());
+
+						String json = Utils.GSON.toJson(obj);
+
+						stream.putNextEntry(newEntry);
+						stream.write(json.getBytes());
+					} else {
+						stream.putNextEntry(entry);
+						try (InputStream istream = file.getInputStream(entry)) {
+							IOUtils.copy(istream, stream);
+						}
+					}
+				}
+			}
+		}
+
+		return configVersion;
 	}
 
 	protected void createModifiedMcpConfig(File origConfig, File newConfig) throws IOException {
