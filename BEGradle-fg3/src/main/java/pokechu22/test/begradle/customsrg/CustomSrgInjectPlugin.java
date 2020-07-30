@@ -16,6 +16,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -31,6 +32,10 @@ import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
 
+import com.amadornes.artifactural.api.artifact.ArtifactIdentifier;
+import com.amadornes.artifactural.base.repository.ArtifactProviderBuilder;
+import com.amadornes.artifactural.base.repository.SimpleRepository;
+import com.amadornes.artifactural.gradle.GradleRepositoryAdapter;
 import com.google.common.collect.Maps;
 
 import net.minecraftforge.gradle.common.util.HashFunction;
@@ -125,25 +130,40 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		}
 		String newVersion = dep.getVersion() + "-" + extraSrgContainer.getSrgSpecifier();
 		String newArtifact = dep.getGroup() + ":" + dep.getName() + ":" + newVersion;
+		project.getLogger().info("Replacing " + dep + " with " + newArtifact);
 		// Trick FG3 into using a new MCPConfig.  This only works for a direct MC dependency at the moment.
 		String mcpConfig = "de.oceanlabs.mcp:mcp_config:" + dep.getVersion() + "@zip";
 		String newMcpConfigPath = "de/oceanlabs/mcp/mcp_config/" + newVersion +
 				"/mcp_config-" + newVersion + ".zip";
 
-		File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false); // performs a download
-		if (origConfig == null) {
-			throw new RuntimeException("Failed to resolve " + mcpConfig);
-		}
+		boolean isPatcher = !dep.getGroup().equals("net.minecraft");
 
-		File newConfig = Utils.getCache(project, "maven_downloader", newMcpConfigPath);
-
-		try {
-			Files.deleteIfExists(newConfig.toPath());
-			createModifiedMcpConfig(origConfig, newConfig);
-			Utils.updateHash(newConfig, HashFunction.MD5);
-		} catch (IOException ex) {
-			project.getLogger().error("Failed to create new SRGs!", ex);
-			throw new UncheckedIOException(ex);
+		if (isPatcher) {
+			RemapAfterRepo repo = new RemapAfterRepo(project, dep.getGroup(), dep.getName(), newVersion,
+					dep.getVersion(), extraSrgContainer);
+			//new BaseRepo.Builder().add(repo).attach(project);
+			int random = new Random().nextInt();
+			File cache = Utils.getCache(project, "bundeled_repo2");
+			GradleRepositoryAdapter.add(project.getRepositories(), "BUNDELEDX_" + random, cache,
+					SimpleRepository.of(ArtifactProviderBuilder.begin(ArtifactIdentifier.class)
+							.provide(repo::getArtifact)));
+		} else {
+			// performs a download
+			File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false);
+			if (origConfig == null) {
+				throw new RuntimeException("Failed to resolve " + mcpConfig);
+			}
+	
+			File newConfig = Utils.getCache(project, "maven_downloader", newMcpConfigPath);
+	
+			try {
+				Files.deleteIfExists(newConfig.toPath());
+				createModifiedMcpConfig(origConfig, newConfig);
+				Utils.updateHash(newConfig, HashFunction.MD5);
+			} catch (IOException ex) {
+				project.getLogger().error("Failed to create new SRGs!", ex);
+				throw new UncheckedIOException(ex);
+			}
 		}
 
 		deps.remove(dep);
