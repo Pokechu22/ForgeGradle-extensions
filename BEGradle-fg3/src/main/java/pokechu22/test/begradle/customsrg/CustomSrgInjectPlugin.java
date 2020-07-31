@@ -11,12 +11,15 @@ import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -32,10 +35,6 @@ import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
 
-import com.amadornes.artifactural.api.artifact.ArtifactIdentifier;
-import com.amadornes.artifactural.base.repository.ArtifactProviderBuilder;
-import com.amadornes.artifactural.base.repository.SimpleRepository;
-import com.amadornes.artifactural.gradle.GradleRepositoryAdapter;
 import com.google.common.collect.Maps;
 
 import net.minecraftforge.gradle.common.util.HashFunction;
@@ -43,6 +42,7 @@ import net.minecraftforge.gradle.common.util.MavenArtifactDownloader;
 import net.minecraftforge.gradle.common.util.MinecraftExtension;
 import net.minecraftforge.gradle.common.util.Utils;
 import net.minecraftforge.gradle.userdev.UserDevPlugin;
+import net.minecraftforge.gradle.userdev.tasks.RenameJar;
 import net.minecraftforge.srgutils.IMappingFile;
 
 /**
@@ -69,13 +69,28 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 
 		project.getLogger().debug("Preparing afterEvaluate for SRG injection");
 		project.afterEvaluate(project_ -> {
-			project_.getLogger().debug("Calling afterEvaluate for SRG injection");
+			project_.getLogger().debug("Calling outer afterEvaluate for SRG injection");
 			if (project_.getState().getFailure() != null) {
 				project_.getLogger().debug("Failed, aborting!");
 				return;
 			}
 
-			afterEvaluate();
+			if (!extraSrgContainer.hasAny()) {
+				project.getLogger().warn("No custom SRGs present, despite injection plugin!");
+				return;
+			}
+
+			project.afterEvaluate(project__ -> {
+				project_.getLogger().debug("Calling nested afterEvaluate for SRG injection");
+				if (project_.getState().getFailure() != null) {
+					project_.getLogger().debug("Failed, aborting!");
+					return;
+				}
+
+				afterEvaluateAfterFG();
+			});
+
+			afterEvaluateBeforeFG();
 		});
 	}
 
@@ -94,16 +109,10 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 	}
 
 	/**
-	 * Called after the project is evaluated.
-	 * 
-	 * @see Project#afterEvaluate(org.gradle.api.Action)
+	 * Called after the project is evaluated, but before ForgeGradle's afterEvaluate
+	 * is called.
 	 */
-	protected void afterEvaluate() {
-		if (!extraSrgContainer.hasAny()) {
-			project.getLogger().warn("No custom SRGs present, despite injection plugin!");
-			return;
-		}
-
+	protected void afterEvaluateBeforeFG() {
 		// We need to add the forge maven now, since it's used to download the mappings
 		// and otherwise we'd try to download them before UserDevPlugin adds it
 		project.getRepositories().maven(e -> {
@@ -111,23 +120,73 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		});
 
 		if (extraSrgContainer.hasSrgs()) {
-			prepareCustomSrg();
+			if (!isPatcherDep()) {
+				prepareCustomSrgVanilla();
+			}
 		}
 		if (extraSrgContainer.hasCsvs()) {
 			prepareCustomCsvs();
 		}
 	}
 
-	protected void prepareCustomSrg() {
+	/**
+	 * Called after the project is evaluated and after ForgeGradle's afterEvaluate
+	 * is called.
+	 */
+	protected void afterEvaluateAfterFG() {
+		if (extraSrgContainer.hasSrgs()) {
+			if (isPatcherDep()) {
+				prepareCustomSrgPatcher();
+			}
+		}
+	}
+
+	/**
+	 * Checks if the current minecraft dependency is a patcher.
+	 *
+	 * @return True if it is a patcher.
+	 */
+	protected boolean isPatcherDep() {
+		return !getMinecraftDep().getGroup().equals("net.minecraft");
+	}
+
+	/**
+	 * Gets the current minecraft dependency, throwing an exception if there is an
+	 * unexpected number of such dependencies.
+	 *
+	 * @return The minecraft dependency.
+	 */
+	protected Dependency getMinecraftDep() {
 		Configuration minecraft = project.getConfigurations().getByName("minecraft");
 		DependencySet deps = minecraft.getDependencies();
-		if (deps.size() != 1) {
-			throw new RuntimeException("Expected only one minecraft dependency, but there were " + deps);
-		}
+		//if (deps.size() != 1) {
+		//	throw new RuntimeException("Expected only one minecraft dependency, but there were " + new ArrayList<>(deps));
+		//}
 		Dependency dep = deps.iterator().next();
 		if (!(dep instanceof ExternalModuleDependency)) {
 			throw new RuntimeException("Expected an ExternalModuleDependency, but was a " + dep.getClass() + " (" + dep + ")");
 		}
+		return dep;
+	}
+
+	/**
+	 * Replaces the minecraft dependency with a different dependency.
+	 *
+	 * @param newArtifact The new minecraft dependency.
+	 */
+	protected void replaceMinecraftDep(String newArtifact) {
+		Configuration minecraft = project.getConfigurations().getByName("minecraft");
+		DependencySet deps = minecraft.getDependencies();
+		deps.clear();
+		deps.add(project.getDependencies().create(newArtifact));
+	}
+
+	/**
+	 * Sets up the custom SRG and replaces the minecraft dependency. This verison
+	 * works only if
+	 */
+	protected void prepareCustomSrgVanilla() {
+		Dependency dep = getMinecraftDep();
 		String newVersion = dep.getVersion() + "-" + extraSrgContainer.getSrgSpecifier();
 		String newArtifact = dep.getGroup() + ":" + dep.getName() + ":" + newVersion;
 		project.getLogger().info("Replacing " + dep + " with " + newArtifact);
@@ -136,38 +195,24 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		String newMcpConfigPath = "de/oceanlabs/mcp/mcp_config/" + newVersion +
 				"/mcp_config-" + newVersion + ".zip";
 
-		boolean isPatcher = !dep.getGroup().equals("net.minecraft");
-
-		if (isPatcher) {
-			RemapAfterRepo repo = new RemapAfterRepo(project, dep.getGroup(), dep.getName(), newVersion,
-					dep.getVersion(), extraSrgContainer);
-			//new BaseRepo.Builder().add(repo).attach(project);
-			int random = new Random().nextInt();
-			File cache = Utils.getCache(project, "bundeled_repo2");
-			GradleRepositoryAdapter.add(project.getRepositories(), "BUNDELEDX_" + random, cache,
-					SimpleRepository.of(ArtifactProviderBuilder.begin(ArtifactIdentifier.class)
-							.provide(repo::getArtifact)));
-		} else {
-			// performs a download
-			File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false);
-			if (origConfig == null) {
-				throw new RuntimeException("Failed to resolve " + mcpConfig);
-			}
-	
-			File newConfig = Utils.getCache(project, "maven_downloader", newMcpConfigPath);
-	
-			try {
-				Files.deleteIfExists(newConfig.toPath());
-				createModifiedMcpConfig(origConfig, newConfig);
-				Utils.updateHash(newConfig, HashFunction.MD5);
-			} catch (IOException ex) {
-				project.getLogger().error("Failed to create new SRGs!", ex);
-				throw new UncheckedIOException(ex);
-			}
+		// performs a download
+		File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false);
+		if (origConfig == null) {
+			throw new RuntimeException("Failed to resolve " + mcpConfig);
 		}
 
-		deps.remove(dep);
-		deps.add(project.getDependencies().create(newArtifact));
+		File newConfig = Utils.getCache(project, "maven_downloader", newMcpConfigPath);
+
+		try {
+			Files.deleteIfExists(newConfig.toPath());
+			createModifiedMcpConfig(origConfig, newConfig);
+			Utils.updateHash(newConfig, HashFunction.MD5);
+		} catch (IOException ex) {
+			project.getLogger().error("Failed to create new SRGs!", ex);
+			throw new UncheckedIOException(ex);
+		}
+
+		replaceMinecraftDep(newArtifact);
 	}
 
 	protected void createModifiedMcpConfig(File origConfig, File newConfig) throws IOException {
@@ -232,6 +277,75 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		try (InputStream s = Files.newInputStream(tempFile, StandardOpenOption.DELETE_ON_CLOSE)) {
 			IOUtils.copy(s, outSrg);
 		}
+	}
+
+	protected void prepareCustomSrgPatcher() {
+		Dependency dep = getMinecraftDep();
+		String group = dep.getGroup();
+		String name = dep.getName();
+		String version = dep.getVersion();
+		String[] parts = version.split("_", 2);
+		// 1.15.2-31.1.0_mapped_snapshot_20200728-1.15.1 to
+		// 1.15.2-31.1.0-custom-3135772e181398b7_mapped_snapshot_20200728-1.15.1
+		// (ForgeGradle needs the stuff after the underscore to match normal mappings)
+		String newVersion = parts[0] + "-" + extraSrgContainer.getSrgSpecifier() + "_" + parts[1];
+
+		String realArtifact = group + ":" + name + ":" + version;
+		String newArtifact = group + ":" + name + ":" + newVersion;
+		String newPath = group.replace('.', '/') + "/" + name + "/" + newVersion + "/" +
+				name + "-" + newVersion + ".jar";
+		String newPathPom = group.replace('.', '/') + "/" + name + "/" + newVersion + "/" +
+				name + "-" + newVersion + ".pom";
+
+		// This is even more expensive than downloading it, since we don't do any caching :|
+		File realPatcher = MavenArtifactDownloader.generate(project, realArtifact, false);
+		File realPatcherPom = MavenArtifactDownloader.generate(project, realArtifact + "@pom", false);
+		if (realPatcher == null || realPatcherPom == null) {
+			throw new RuntimeException("Failed to resolve real patcher " + realArtifact);
+		}
+
+		File newPatcher = Utils.getCache(project, "maven_downloader", newPath);
+		File newPatcherPom = Utils.getCache(project, "maven_downloader", newPathPom);
+
+		try {
+			Files.deleteIfExists(newPatcher.toPath());
+			remapPatcherBinary(realPatcher, newPatcher);
+			Utils.updateHash(newPatcher, HashFunction.SHA1);
+
+			Files.copy(realPatcherPom.toPath(), newPatcherPom.toPath(), StandardCopyOption.REPLACE_EXISTING);
+			Utils.updateHash(newPatcherPom, HashFunction.SHA1);
+		} catch (IOException ex) {
+			project.getLogger().error("Failed to create new patcher!", ex);
+			throw new UncheckedIOException(ex);
+		}
+
+		replaceMinecraftDep(newArtifact);
+	}
+
+	protected void remapPatcherBinary(File origPatcher, File newPatcher) throws IOException {
+		newPatcher.getParentFile().mkdirs();
+
+		List<IMappingFile> mappingFiles = new ArrayList<>();
+		for (File file : extraSrgContainer.getSrgs()) {
+			mappingFiles.add(IMappingFile.load(file));
+		}
+		Optional<IMappingFile> mappings = mappingFiles.stream().reduce(IMappingFile::chain);
+		if (!mappings.isPresent()) {
+			project.getLogger().error("No mappings?  List " +
+					extraSrgContainer.getSrgs() + ", read to " + mappingFiles);
+		}
+
+		Path tempFile = Files.createTempFile("RemappedSRG", ".tsrg");
+		tempFile.toFile().deleteOnExit();
+		mappings.get().write(tempFile, IMappingFile.Format.TSRG, false);
+
+		// Task usage seems dubious to me, but is what FG3 does elsewhere
+		RenameJar rename = project.getTasks().create("remapPatcher", RenameJar.class);
+		rename.setHasLog(false);
+		rename.setInput(origPatcher);
+		rename.setOutput(newPatcher);
+		rename.setMappings(tempFile.toFile());
+		rename.apply();
 	}
 
 	protected void prepareCustomCsvs() {
