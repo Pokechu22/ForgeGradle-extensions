@@ -16,7 +16,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Random;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -32,17 +31,23 @@ import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
 
-import com.amadornes.artifactural.api.artifact.ArtifactIdentifier;
-import com.amadornes.artifactural.base.repository.ArtifactProviderBuilder;
-import com.amadornes.artifactural.base.repository.SimpleRepository;
-import com.amadornes.artifactural.gradle.GradleRepositoryAdapter;
 import com.google.common.collect.Maps;
 
+import net.minecraftforge.gradle.common.task.DownloadAssets;
+import net.minecraftforge.gradle.common.task.ExtractNatives;
+import net.minecraftforge.gradle.common.util.BaseRepo;
 import net.minecraftforge.gradle.common.util.HashFunction;
 import net.minecraftforge.gradle.common.util.MavenArtifactDownloader;
 import net.minecraftforge.gradle.common.util.MinecraftExtension;
+import net.minecraftforge.gradle.common.util.MinecraftRepo;
+import net.minecraftforge.gradle.common.util.RunConfig;
 import net.minecraftforge.gradle.common.util.Utils;
+import net.minecraftforge.gradle.mcp.MCPRepo;
+import net.minecraftforge.gradle.mcp.task.GenerateSRG;
+import net.minecraftforge.gradle.userdev.MinecraftUserRepo;
+import net.minecraftforge.gradle.userdev.UserDevExtension;
 import net.minecraftforge.gradle.userdev.UserDevPlugin;
+import net.minecraftforge.gradle.userdev.util.DeobfuscatingRepo;
 import net.minecraftforge.srgutils.IMappingFile;
 
 /**
@@ -139,14 +144,33 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		boolean isPatcher = !dep.getGroup().equals("net.minecraft");
 
 		if (isPatcher) {
-			RemapAfterRepo repo = new RemapAfterRepo(project, dep.getGroup(), dep.getName(), newVersion,
-					dep.getVersion(), extraSrgContainer);
-			//new BaseRepo.Builder().add(repo).attach(project);
-			int random = new Random().nextInt();
-			File cache = Utils.getCache(project, "bundeled_repo2");
-			GradleRepositoryAdapter.add(project.getRepositories(), "BUNDELEDX_" + random, cache,
-					SimpleRepository.of(ArtifactProviderBuilder.begin(ArtifactIdentifier.class)
-							.provide(repo::getArtifact)));
+			// Do further work AFTER ForgeGradle does its afterEvaluate.
+			// This second afterEvaluate (remember, we're currently in one) is called after
+			// all other ones finish.
+			project.afterEvaluate(project -> {
+				deps.remove(dep);
+				deps.add(project.getDependencies().create(newArtifact));
+
+				RemapAfterRepo remapRepo = new RemapAfterRepo(project, dep.getGroup(), dep.getName(),
+						newVersion, dep.getVersion(), extraSrgContainer);
+
+				UserDevExtension extension = project.getExtensions().findByType(UserDevExtension.class);
+				MinecraftUserRepo mcrepo = new MinecraftUserRepo(project, dep.getGroup(), dep.getName(),
+						dep.getVersion(), extension.getAccessTransformers(), extension.getMappings()) {
+					@Override
+					public void validate(Configuration cfg, Map<String, RunConfig> runs, ExtractNatives extractNatives, DownloadAssets downloadAssets, GenerateSRG createSrgToMcp) {
+						project.getLogger().info("validate()");
+					}
+				};
+				DeobfuscatingRepo deobfrepo = null; // We don't care about this yet
+				new BaseRepo.Builder()
+						.add(mcrepo)
+						.add(remapRepo)
+						.add(deobfrepo)
+						.add(MCPRepo.create(project))
+						.add(MinecraftRepo.create(project))
+						.attach(project);
+			});
 		} else {
 			// performs a download
 			File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false);
@@ -164,10 +188,10 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 				project.getLogger().error("Failed to create new SRGs!", ex);
 				throw new UncheckedIOException(ex);
 			}
-		}
 
-		deps.remove(dep);
-		deps.add(project.getDependencies().create(newArtifact));
+			deps.remove(dep);
+			deps.add(project.getDependencies().create(newArtifact));
+		}
 	}
 
 	protected void createModifiedMcpConfig(File origConfig, File newConfig) throws IOException {
