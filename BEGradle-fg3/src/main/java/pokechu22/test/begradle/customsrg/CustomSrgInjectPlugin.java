@@ -33,21 +33,11 @@ import org.gradle.api.plugins.PluginCollection;
 
 import com.google.common.collect.Maps;
 
-import net.minecraftforge.gradle.common.task.DownloadAssets;
-import net.minecraftforge.gradle.common.task.ExtractNatives;
-import net.minecraftforge.gradle.common.util.BaseRepo;
 import net.minecraftforge.gradle.common.util.HashFunction;
 import net.minecraftforge.gradle.common.util.MavenArtifactDownloader;
 import net.minecraftforge.gradle.common.util.MinecraftExtension;
-import net.minecraftforge.gradle.common.util.MinecraftRepo;
-import net.minecraftforge.gradle.common.util.RunConfig;
 import net.minecraftforge.gradle.common.util.Utils;
-import net.minecraftforge.gradle.mcp.MCPRepo;
-import net.minecraftforge.gradle.mcp.task.GenerateSRG;
-import net.minecraftforge.gradle.userdev.MinecraftUserRepo;
-import net.minecraftforge.gradle.userdev.UserDevExtension;
 import net.minecraftforge.gradle.userdev.UserDevPlugin;
-import net.minecraftforge.gradle.userdev.util.DeobfuscatingRepo;
 import net.minecraftforge.srgutils.IMappingFile;
 
 /**
@@ -147,7 +137,8 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			// Do further work AFTER ForgeGradle does its afterEvaluate.
 			// This second afterEvaluate (remember, we're currently in one) is called after
 			// all other ones finish.
-			project.afterEvaluate(project -> {
+			throw new RuntimeException("Custom SRGs don't currently work with patcher projects!");
+			/*project.afterEvaluate(project -> {
 				deps.remove(dep);
 				deps.add(project.getDependencies().create(newArtifact));
 
@@ -170,7 +161,7 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 						.add(MCPRepo.create(project))
 						.add(MinecraftRepo.create(project))
 						.attach(project);
-			});
+			});*/
 		} else {
 			// performs a download
 			File origConfig = MavenArtifactDownloader.manual(project, mcpConfig, false);
