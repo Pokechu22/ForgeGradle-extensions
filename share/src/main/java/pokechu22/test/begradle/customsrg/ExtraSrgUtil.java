@@ -279,9 +279,7 @@ public class ExtraSrgUtil {
 	 * @throws IOException when an IO error occurs
 	 */
 	public static void writeCSV(Writer writer, LinkedHashMap<String, String[]> map, boolean isParams) throws IOException {
-		try (CSVWriter csvWriter = new CSVWriter(writer, CSVWriter.DEFAULT_SEPARATOR,
-				CSVWriter.DEFAULT_QUOTE_CHARACTER, CSVWriter.NO_ESCAPE_CHARACTER,
-				CSVWriter.DEFAULT_LINE_END)) {
+		try (CSVWriter csvWriter = new CSVWriter(writer, ',', '"', '"', "\n")) {
 			csvWriter.writeNext(isParams ? PARAMS_HEADER : HEADER);
 
 			for (String[] line : map.values()) {
