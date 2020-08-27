@@ -12,15 +12,19 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.io.IOUtils;
+import org.gradle.api.DefaultTask;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -30,6 +34,10 @@ import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.plugins.InvalidPluginException;
 import org.gradle.api.plugins.PluginCollection;
+import org.gradle.api.tasks.InputFiles;
+import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.TaskAction;
+import org.gradle.api.tasks.TaskProvider;
 
 import com.google.common.collect.Maps;
 
@@ -38,7 +46,9 @@ import net.minecraftforge.gradle.common.util.MavenArtifactDownloader;
 import net.minecraftforge.gradle.common.util.MinecraftExtension;
 import net.minecraftforge.gradle.common.util.Utils;
 import net.minecraftforge.gradle.userdev.UserDevPlugin;
+import net.minecraftforge.gradle.userdev.tasks.RenameJarInPlace;
 import net.minecraftforge.srgutils.IMappingFile;
+import pokechu22.test.begradle.baseedit.BaseEditPlugin;
 
 /**
  * A plugin that handles custom SRG tasks.
@@ -86,6 +96,27 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			throw new RuntimeException(new InvalidPluginException(
 					"Can't set up custom SRGs - FG plugin already set up: " + plugins));
 		}
+	}
+
+	/**
+	 * HACKY. After evaluate, we now want to find a plugin, to handle additional
+	 * remapping.
+	 */
+	private UserDevPlugin findNewlyAssociatedPlugin() {
+		PluginCollection<UserDevPlugin> plugins =
+				project.getPlugins().withType(UserDevPlugin.class);
+
+		if (plugins.size() == 0) {
+			throw new RuntimeException(new InvalidPluginException(
+					"Can't set up custom SRGs - can't find a normal FG plugin."));
+		}
+		if (plugins.size() > 1) {
+			throw new RuntimeException(new InvalidPluginException(
+					"Can't set up custom SRGs - more than 1 FG plugin: " + plugins +
+					" (if this is a valid configuration, sorry; I didn't design around it)"));
+		}
+
+		return plugins.iterator().next();
 	}
 
 	/**
@@ -183,6 +214,14 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 			deps.remove(dep);
 			deps.add(project.getDependencies().create(newArtifact));
 		}
+
+		// TODO: After patcher reintroduced, this code may need to be moved.
+		UserDevPlugin plugin = findNewlyAssociatedPlugin();
+
+		// We don't need to adjust the reobf tasks for baseedits, since they reobf to Notch names.
+		if (!(plugin instanceof BaseEditPlugin)) {
+			adjustReobfTasks();
+		}
 	}
 
 	protected void createModifiedMcpConfig(File origConfig, File newConfig) throws IOException {
@@ -247,6 +286,56 @@ public class CustomSrgInjectPlugin implements Plugin<Project> {
 		try (InputStream s = Files.newInputStream(tempFile, StandardOpenOption.DELETE_ON_CLOSE)) {
 			IOUtils.copy(s, outSrg);
 		}
+	}
+
+	// TODO: This is mostly a duplicate of writeRemappedSrg
+	public static class GenerateReverseExtraSrg extends DefaultTask {
+		private File output = getProject().file("build/" + getName() + "/output.tsrg");
+		private List<File> extraSrgs;
+
+		@InputFiles
+		public List<File> getExtraSrgs() {
+			return extraSrgs;
+		}
+		public void setExtraSrgs(List<File> value) {
+			this.extraSrgs = value;
+		}
+
+		@OutputFile
+		public File getOutput() {
+			return output;
+		}
+		public void setOutput(File value) {
+			this.output = value;
+		}
+
+		@TaskAction
+		public void apply() throws IOException, NoSuchElementException {
+			List<IMappingFile> mappings = new ArrayList<>(extraSrgs.size());
+			for (File file : extraSrgs) {
+				mappings.add(IMappingFile.load(file).reverse());
+			}
+			IMappingFile mapping = mappings.stream().reduce(IMappingFile::chain).get();
+			mapping.write(output.toPath(), IMappingFile.Format.TSRG, false);
+		}
+	}
+
+	// This must be run in a 2nd-level afterEvaluate, so that the main plugin has
+	// had its afterEvaluate called.
+	protected void adjustReobfTasks() {
+		TaskProvider<GenerateReverseExtraSrg> createReverseExtraSrg = project.getTasks()
+				.register("createReverseExtraSrg", GenerateReverseExtraSrg.class);
+
+		createReverseExtraSrg.configure(task -> {
+			task.setExtraSrgs(extraSrgContainer.getSrgs());
+		});
+
+		// NOTE: I previously used setMappings here, but that didn't work for some reason
+		// (as if FG was overwriting my mappings).  No idea why, but extraMapping is fine.
+		project.getTasks().withType(RenameJarInPlace.class, task -> {
+			task.dependsOn(createReverseExtraSrg);
+			task.extraMapping(createReverseExtraSrg.get().getOutput());
+		});
 	}
 
 	protected void prepareCustomCsvs() {
